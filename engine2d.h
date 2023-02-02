@@ -1,64 +1,128 @@
-/*
-
-This file implements a 2d engine that uses Windows and Direct3D 11 APIs.
-
-Here is the interface of this Engine, you as the user will only use the following
-
---- START OF INTERFACE
-
-*/
+/******************************************************************************
+*** This file implements a 2d engine that uses Windows and Direct3D 11 APIs.
+*** NOTE: This file development is currently IN PROGRESS.
+******************************************************************************/
 
 
-// Name of Example function, it can explain its purpose but must be single line
+/******************************************************************************
+*********************************************************** START OF INTERFACE
+******************************************************************************/
 
-void example_function(void);
 
-// void render_draw_rect(float x, float y, float width, float height, Color color);
+/******************************************************************************
+*** NAME OF EXAMPLE FUNCTION should be all caps to highlight it
+*******************************************************************************
+*** void example_function(void);
+*******************************************************************************
+*** This is the example explanation of this example function. Explanations can
+*** and often will span multiple lines. Which means it should make clear what
+*** happens in the function and how the user uses it.
+******************************************************************************/
 
-/* This is the example explanation of this example function. Explanations can
-and often will span multiple lines. Which means it should make it clear what is
-happening in the function and how the user uses it. */
 
-/*
---- END OF INTERFACE
+/******************************************************************************
+*** TODO: Describe the interface
+******************************************************************************/
 
-From this point on the user of this renderer does not need to know anything
 
-Here is an overview of the following program
+/******************************************************************************
+************************************************************* END OF INTERFACE
+*******************************************************************************
+*** From this point on the user of this engine does not need to know anything.
+******************************************************************************/
 
-[DEPENDENCIES]
- [D1] . Include Windows and Direct3D 11 APIs, define COBJMACROS to use D3D11 with C
- [D2] . Include C libraries to assist us with File I/O, math, string processing, etc...
-  [D3] . Define useful/convenient types that C doesn't have
-   [D4] . Define data structures that are useful in general
-[D5] . Define data structures that are used by the renderer core
 
-[CONFIGURATION]
+/******************************************************************************
+************************************************************ START OF OVERVIEW
+*******************************************************************************
+*** Following there is a high level overwview of everything this file does.
+*** All parts of the code are marked with [D1], [D2], [D3], [W1], [W2], etc...
+*** So you can quickly navigate forward and back by searching for these terms.
+******************************************************************************/
 
-[WINDOWPROC]
-[W1] . When Close/Destroy message, flag engine.running as false so the app will stop
-[W2] . Handle keyboard messages
-[W3] . Call DefWindowProcA for every message we don't handle to preserve the default
 
-[INITIALIZATION]
-[I1] . Register a window class and create a window
-[I2] . Initialize Direct3D 11 API (Create Device, Context and SwapChain)
-[I3] . Get Direct3D 11 Debugger from Device and set break severity to warning
-[I4] . Get backbuffer from swap chain and create a texture to use as the depth stencil buffer
-[I5] . Create views for render target and depth stencil buffer
-[I6] . Create depth stencil state, blend state, rasterizer state and sampler state
-[I7] . Create vertex shader and pixel shader
-[I8] . Create the input layout
-[I9] . Create vertex buffer and constant buffer
+/******************************************************************************
+*** [DEPENDENCIES]
+*** [D1] . Include Windows and Direct3D, define COBJMACROS to use D3D11 with C
+*** [D2] . Include C libs to use math, string processing, etc...
+*** [D3] . Define useful/convenient types that C doesn't have
+*** [D4] . Define data structures that are useful in general
+*** [D5] . Define data structures that are used by the renderer core
+******************************************************************************/
 
-[RUNTIME]
-[R1] . Process Windows messages
-        [R2] . Resize the swap chain and buffers if the window size changed 
-        
-*/
 
-// [DEPENDENCIES]
-// [D1] . Include Windows and Direct3D 11 APIs, define COBJMACROS to use D3D11 with C
+/******************************************************************************
+*** [CONFIGURATION]
+*** TODO
+******************************************************************************/
+
+
+/******************************************************************************
+*** [API]
+*** TODO
+******************************************************************************/
+
+
+/******************************************************************************
+*** [WINDOWPROC]
+*** [W1] . When Close/Destroy message, flag engine.running as false
+*** [W2] . Handle keyboard messages
+*** [W3] . Call DefWindowProcA for every message we don't handle
+******************************************************************************/
+
+
+/******************************************************************************
+*** [ENTRYPOINT]
+******************************************************************************/
+
+
+/******************************************************************************
+*** [INITIALIZATION]
+*** [I1] . Register a window class and create a window
+*** [I2] . Initialize Direct3D 11 API (Create Device, Context and SwapChain)
+*** [I3] . Get Direct3D Debugger from Device and set break severity to warning
+*** [I4] . Get backbuffer from swapchain and create texture for ds buffer
+*** [I5] . Create views for render target and depth stencil buffer
+*** [I6] . Create ds state, blend state, rasterizer state and sampler state
+*** [I7] . Create vertex shader and pixel shader
+*** [I8] . Create the input layout
+*** [I9] . Create vertex buffer and constant buffer
+******************************************************************************/
+
+
+/******************************************************************************
+*** [RUNTIME]
+*** [R1] . Process Windows messages
+*** [R2] . Resize the swap chain and buffers if the window size changed 
+*** [R3] . Do the rendering
+*** [R4] . Update the World View Projection matrix
+            *** [R5] . Configure the input assembly pipeline stage
+            *** [R6] . Configure the shaders
+            *** [R7] . Configure the rasterizer
+            *** [R8] . Configure the output merger
+            *** [R9] . Draw and present the frame
+            ******************************************************************************/
+
+
+/******************************************************************************
+************************************************************** END OF OVERVIEW
+******************************************************************************/
+
+
+
+/******************************************************************************
+****************************************************** START OF IMPLEMENTATION
+******************************************************************************/
+
+
+/******************************************************************************
+*** [DEPENDENCIES]
+******************************************************************************/
+
+
+/******************************************************************************
+*** [D1] . Include Windows and Direct3D, define COBJMACROS to use D3D11 with C
+******************************************************************************/
 
 // We must define this to be able to use Direct3D 11 API in C
 #define COBJMACROS
@@ -75,7 +139,9 @@ Here is an overview of the following program
 #define STB_IMAGE_IMPLEMENTATION
 #include "w:\libs\stb_image.h"
 
-// [D2] . Include C libraries to assist us with File I/O, math, string processing, etc...
+/******************************************************************************
+*** [D2] . Include C libraries to use math, string processing, etc...
+******************************************************************************/
 
 // Must include C headers
 #include <stdio.h>
@@ -84,7 +150,9 @@ Here is an overview of the following program
 #include <math.h>
 #include <assert.h>
 
-// [D3] . Define useful/convenient types that C doesn't have
+/******************************************************************************
+*** [D3] . Define useful/convenient types that C doesn't have
+******************************************************************************/
 
 // Define short version of common types
 typedef int8_t s8;
@@ -112,7 +180,9 @@ typedef uint32_t bool;
 
 #define array_count(a) (sizeof(a) / sizeof((a)[0]))
 
-// [D4] . Define data structures that are useful in general
+/******************************************************************************
+*** [D4] . Define data structures that are useful in general
+******************************************************************************/
 
 typedef struct
 {
@@ -329,7 +399,10 @@ function void quick_sort_indices(SortIndex a[], int beg, int end)
     }
 }
 
-// [D5] . Define data structures that are used by the renderer core
+/******************************************************************************
+*** [D5] . Define data structures that are used by the renderer core
+******************************************************************************/
+
 typedef struct
 {
     Vector3 pos;
@@ -399,24 +472,24 @@ typedef struct
     ID3D11DeviceContext *context;
     IDXGISwapChain *swapChain;
     ID3D11Debug *debugger;
-    ID3D11Texture2D *backBufferTexture;
-    ID3D11Texture2D *depthStencilBufferTexture;
-    ID3D11RenderTargetView *renderTargetView;
-    ID3D11DepthStencilView *depthStencilView;
-    ID3D11DepthStencilState *depthStencilState;
+    ID3D11Texture2D *bbTexture; // Bback buffer texture
+    ID3D11Texture2D *dsbTexture; // Depth stencil buffer texture
+    ID3D11RenderTargetView *rtv;
+    ID3D11DepthStencilView *dsv;
+    ID3D11DepthStencilState *dss;
     ID3D11BlendState *blendState;
 	ID3D11RasterizerState *rasterizerState;
     ID3D11SamplerState *samplerState;
     ID3D11VertexShader *vertexShader;
     ID3D11PixelShader *pixelShader;
     ID3D11InputLayout *inputLayout;
-    ID3D11Buffer *vertexBuffer;
-    ID3D11Buffer *vertexConstantBuffer;
-    VertexConstantBuffer vertexConstantBufferData;
+    ID3D11Buffer *vertexBuffer; // Vertex buffer for input assembler
+    ID3D11Buffer *vertexCBuffer; // Constant buffer for vertex shader
+    VertexConstantBuffer vertexCBufferData; // Data for above
     RenderCommand *renderCommands;
     u32 renderCommandsPushedCount;
     ID3D11Texture2D *atlasTexture;
-    ID3D11ShaderResourceView *atlasTextureShaderResourceView;
+    ID3D11ShaderResourceView *atlasTexSRV;
     SpriteAtlas spriteAtlas;
     Keys key;
     bool inputCharEntered;
@@ -428,7 +501,9 @@ global Engine engine;
 function void init();
 function void update();
 
-// [CONFIGURATION]
+/******************************************************************************
+*** [CONFIGURATION]
+******************************************************************************/
 
 #ifndef BACKBUFFER_WIDTH
 #define BACKBUFFER_WIDTH 800
@@ -450,7 +525,9 @@ function void update();
 #define SPRITE_ATLAS_SIZE 4096
 #endif
 
-// [API]
+/*****************************************************************************
+*** [API]
+******************************************************************************/
 
 function u8 *load_png(char *filePath, int *width, int *height)
 {
@@ -517,14 +594,14 @@ sprite_create(char *filePath)
     
     SpriteAtlas *atlas = &engine.spriteAtlas;
     
-    // If the sprite doesn't fit in the current row we need to advance to next row
+    // If the sprite doesn't fit in current row, need to advance to next row
     if ((atlas->atX + spriteWidth) > atlas->size)
     {
         atlas->atX = 0;
         atlas->atY = atlas->bottom;
     }
     
-    // If the sprite is taller than previous ones in this row, then grow the bottom
+    // If the sprite is taller than previous ones in row, grow the bottom
     if (atlas->bottom < (atlas->atY + spriteHeight))
     {
         atlas->bottom = atlas->atY + spriteHeight;
@@ -561,7 +638,8 @@ base_draw_rect(float x, float y,
                float r, float g, float b, float a,
                float layer)
 {
-    RenderCommand *command = engine.renderCommands + engine.renderCommandsPushedCount;
+    RenderCommand *command = engine.renderCommands + 
+        engine.renderCommandsPushedCount;
     command->pos = v2(x,y);
     command->size = v2(width,height);
     float eps = 0.001f;
@@ -599,13 +677,16 @@ draw_sprite(Sprite sprite,
                    layer);
 }
 
-// [WINDOWPROC]
+/******************************************************************************
+*** [WINDOWPROC]
+******************************************************************************/
+
 LRESULT window_proc(HWND window, UINT message, WPARAM wParam, LPARAM lParam)
 {
     LRESULT result = 0;
     switch (message) {
         
-        // [W1] . When Close/Destroy message, flag engine.running as false so the app will stop
+        // [W1] . When Close/Destroy message, flag engine.running as false
         case WM_DESTROY:
         case WM_CLOSE:
         {
@@ -645,7 +726,7 @@ LRESULT window_proc(HWND window, UINT message, WPARAM wParam, LPARAM lParam)
         } break;
         
         
-        // [W3] . Call DefWindowProcA for every message we don't handle to preserve the default
+        // [W3] . Call DefWindowProcA for every message we don't handle
         default:
         {
             result = DefWindowProcA(window, message, wParam, lParam);
@@ -654,13 +735,25 @@ LRESULT window_proc(HWND window, UINT message, WPARAM wParam, LPARAM lParam)
     return result;
 }
 
+
+/******************************************************************************
+*** [ENTRYPOINT]
+******************************************************************************/
+
+
 // Here is the entry point of our application that uses Windows API 
-int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmdshow)
+int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, 
+                     PSTR cmdline, int cmdshow)
 {
-    // [INITIALIZATION]
-    // [I1] . Register a window class and create a window
+    /**************************************************************************
+    *** [INITIALIZATION]
+    **************************************************************************/
     
-    // We register a window class with the window characteristcs that we desire
+    /**************************************************************************
+    *** [I1] . Register a window class and create a window
+    **************************************************************************/
+    
+    // We register a window class with the window characteristcs we desire
     WNDCLASSEXA windowClass = 
     {
         sizeof(windowClass), 
@@ -675,8 +768,8 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
     
     if (RegisterClassExA(&windowClass) == 0) exit(1);
     
-    // To create the window the size we want, we need to expand the width and height
-    // to account for the border of the window, for that we use AdjustWindowRect
+    // To create the window the size, we need to expand the width and height
+    // to account for the border of the window, hence AdjustWindowRect
     u32 windowWidth = BACKBUFFER_WIDTH;
     u32 windowHeight = BACKBUFFER_HEIGHT;
     RECT size = {0, 0, windowWidth, windowHeight};
@@ -684,11 +777,11 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
     windowWidth = size.right - size.left;
     windowHeight = size.bottom - size.top;
     
-    // Save the backbuffer size because we need to compare it later to see if it changes
+    // Save the backbuffer size to compare it later to see if it changes
     engine.backBufferSize.x = BACKBUFFER_WIDTH;
     engine.backBufferSize.y = BACKBUFFER_HEIGHT;
     
-    // We create the window where we will be showing the buffer we render to
+    // We create the window where we will show the buffer we render to
     engine.window = CreateWindowExA(0, 
                                     "engine2d_window_class", 
                                     WINDOW_TITLE,
@@ -700,16 +793,18 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
     
     if (engine.window == NULL) exit(1);
     
-    // [I2] . Initialize Direct3D 11 API (Create Device, Context and SwapChain)
+    /**************************************************************************
+    *** [I2] . Initialize Direct3D 11 (Create Device, Context and SwapChain)
+    **************************************************************************/
     
-    // Now for initializing the Direct3D 11 API, we start by specifying a refresh rate in Hz
+    // Now for initializing the Direct3D 11 API, start with refresh rate in Hz
     DXGI_RATIONAL refreshRate = 
     { 
         .Numerator = 60, 
         .Denominator = 1,
     };
     
-    // We specify a buffer desc that describes the back buffer we will render to
+    // Specify a buffer desc that describes the back buffer we will render to
     DXGI_MODE_DESC bufferDesc = 
     { 
         BACKBUFFER_WIDTH, 
@@ -720,14 +815,14 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
         DXGI_MODE_SCALING_CENTERED,
     };
     
-    // We also specify a sample desc that describes the multisample quality if used at all
+    // Specify a sample desc that describes multisample quality if used at all
     DXGI_SAMPLE_DESC backBufferSampleDesc = 
     { 
         .Count = 1, 
         .Quality = 0, 
     };
     
-    // With that we can specify the swap chain desc that we will use to create a swap chain
+    // Specify the swap chain desc that we will use to create a swap chain
     DXGI_SWAP_CHAIN_DESC swapChainDesc = 
     { 
         bufferDesc, 
@@ -740,7 +835,7 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
         0, 
     };
     
-    // We need to define an array of feature levels that we accept if the pc doesn't have
+    // Define an array of feature levels that we accept if the pc doesn't have
     // Direct3D 11.1 available.
     D3D_FEATURE_LEVEL featureLevels[] =
     {
@@ -753,7 +848,7 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
         D3D_FEATURE_LEVEL_9_1
     };
     
-    // Finally we are going to create the Device, the DeviceContext and the SwapChain all in
+    // Create the Device, the DeviceContext and the SwapChain all in
     // one go with this super function
     if (FAILED(D3D11CreateDeviceAndSwapChain(NULL,
                                              D3D_DRIVER_TYPE_HARDWARE,
@@ -771,44 +866,52 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
         exit(1);
     }
     
-    // [I3] . Get Direct3D 11 Debugger from Device and set break severity to warning
+    /**************************************************************************
+    *** [I3] . Get D3D11 Debugger from Device, set break severity to warning
+    **************************************************************************/
     
-    // So that we have an easy time debugging the Direct3D 11 API we will get a debugger from the device
-    if (FAILED(ID3D11Device_QueryInterface(engine.device, &IID_ID3D11Debug, (void **)&engine.debugger)))
+    // We will get a debugger from the device
+    if (FAILED(ID3D11Device_QueryInterface(engine.device, &IID_ID3D11Debug, 
+                                           (void **)&engine.debugger)))
     {
         exit(1);
     }
     
-    // Get an InfoQueue to use it to set the severity of messages that we want the debugger to break at
+    // Get an InfoQueue to set the severity of messages the debugger breaks at
     ID3D11InfoQueue *infoQueue;
-    ID3D11Device_QueryInterface(engine.device, &IID_ID3D11InfoQueue, (void **)&infoQueue);
+    ID3D11Device_QueryInterface(engine.device, &IID_ID3D11InfoQueue, 
+                                (void **)&infoQueue);
     
     // Set that severity as we said
-    ID3D11InfoQueue_SetBreakOnSeverity(infoQueue, D3D11_MESSAGE_SEVERITY_WARNING, TRUE);
+    ID3D11InfoQueue_SetBreakOnSeverity(infoQueue, 
+                                       D3D11_MESSAGE_SEVERITY_WARNING, TRUE);
     
-    // And release the info queue since we no longer need it, what a short life!
+    // And release the info queue since we no longer need it, what short life!
     ID3D11InfoQueue_Release(infoQueue);
     
-    // [I4] . Get backbuffer from swap chain and create a texture to use as the depth stencil buffer
+    
+    /**************************************************************************
+    *** [I4] . Get backbuffer from swapchain and create texture for ds buffer
+    **************************************************************************/
     
     // Get the backbuffer from the swap chain
     if (FAILED(IDXGISwapChain_GetBuffer(engine.swapChain, 
                                         0, 
                                         &IID_ID3D11Texture2D, 
-                                        (void **)&engine.backBufferTexture)))
+                                        (void **)&engine.bbTexture)))
     {
         exit(1);
     }
     
-    // Then we need to create a depth stencil buffer texture, for that we need a tex2d desc
-    DXGI_FORMAT depthStencilBufferFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
-    D3D11_TEXTURE2D_DESC depthStencilBufferTexture2DDesc = 
+    // To create a depth stencil buffer texture we need a tex2d desc
+    DXGI_FORMAT dsbFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+    D3D11_TEXTURE2D_DESC dsbTexture2DDesc = 
     {
         BACKBUFFER_WIDTH,
         BACKBUFFER_HEIGHT,
         0,
         1,
-        depthStencilBufferFormat,
+        dsbFormat,
         backBufferSampleDesc,
         D3D11_USAGE_DEFAULT,
         D3D11_BIND_DEPTH_STENCIL,
@@ -818,9 +921,9 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
     
     // We create the texture for the depth stencil buffer
     if (FAILED(ID3D11Device_CreateTexture2D(engine.device, 
-                                            &depthStencilBufferTexture2DDesc, 
+                                            &dsbTexture2DDesc, 
                                             0, 
-                                            &engine.depthStencilBufferTexture)))
+                                            &engine.dsbTexture)))
     {
         exit(1);
 	}
@@ -849,12 +952,12 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
     };
     
     // Allocate memory for the texture atlas
-    u32 atlasMemorySize = engine.spriteAtlas.size * engine.spriteAtlas.size * 4;
+    u32 atlasMemorySize = engine.spriteAtlas.size * 
+        engine.spriteAtlas.size * 4;
     engine.spriteAtlas.bytes = (u8 *)malloc(atlasMemorySize);
     
-    // Call the app because they will be the ones loading the pngs and creatin the atlas data
+    // Call the app because they will be the ones loading the pngs 
     init();
-    
     
     // Fill the subresource data
     D3D11_SUBRESOURCE_DATA atlasData =
@@ -873,21 +976,24 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
 		exit(1);
     }
     
-    // [I5] . Create views for render target and depth stencil buffer
+    /**************************************************************************
+    *** [I5] . Create views for render target and depth stencil buffer
+    **************************************************************************/
     
     // Now we can create the views, first the render target view
     if (FAILED(ID3D11Device_CreateRenderTargetView(engine.device, 
-                                                   (ID3D11Resource *)engine.backBufferTexture, 
+                                                   (ID3D11Resource *)
+                                                   engine.bbTexture, 
                                                    0,
-                                                   &engine.renderTargetView)))
+                                                   &engine.rtv)))
     {
         exit(1);
 	}
     
-    // Then, to create the depth stencil view we need a depth stencil view description
-    D3D11_DEPTH_STENCIL_VIEW_DESC depthStencilViewDesc = 
+    // Then, to create the ds view we need a depth stencil view description
+    D3D11_DEPTH_STENCIL_VIEW_DESC dsvDesc = 
     {
-        depthStencilBufferFormat,
+        dsbFormat,
         D3D11_DSV_DIMENSION_TEXTURE2D,
         0,
         .Texture2D = { 0 },
@@ -895,32 +1001,36 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
     
     // So we create the depth stencil view as well
     if (FAILED(ID3D11Device_CreateDepthStencilView(engine.device, 
-                                                   (ID3D11Resource *)engine.depthStencilBufferTexture, 
-                                                   &depthStencilViewDesc, 
-                                                   &engine.depthStencilView)))
+                                                   (ID3D11Resource *)
+                                                   engine.dsbTexture, 
+                                                   &dsvDesc, 
+                                                   &engine.dsv)))
     {
         exit(1);
 	}
     
     // Create the shader resource view for the texture
-    D3D11_SHADER_RESOURCE_VIEW_DESC atlasTextureShaderResourceViewDesc;
-    atlasTextureShaderResourceViewDesc.Format = atlasTextureFormat;
-    atlasTextureShaderResourceViewDesc.ViewDimension = D3D_SRV_DIMENSION_TEXTURE2D;
-    atlasTextureShaderResourceViewDesc.Texture2D.MostDetailedMip = 0;
-    atlasTextureShaderResourceViewDesc.Texture2D.MipLevels = 1;
+    D3D11_SHADER_RESOURCE_VIEW_DESC atlasTextureSRVDesc;
+    atlasTextureSRVDesc.Format = atlasTextureFormat;
+    atlasTextureSRVDesc.ViewDimension = D3D_SRV_DIMENSION_TEXTURE2D;
+    atlasTextureSRVDesc.Texture2D.MostDetailedMip = 0;
+    atlasTextureSRVDesc.Texture2D.MipLevels = 1;
     
     if (FAILED(ID3D11Device_CreateShaderResourceView(engine.device,
-                                                     (ID3D11Resource *)engine.atlasTexture, 
-                                                     &atlasTextureShaderResourceViewDesc, 
-                                                     &engine.atlasTextureShaderResourceView)))
+                                                     (ID3D11Resource *)
+                                                     engine.atlasTexture, 
+                                                     &atlasTextureSRVDesc, 
+                                                     &engine.atlasTexSRV)))
 	{
 		exit(1);
 	}
     
-    // [I6] . Create depth stencil state, blend state, rasterizer state and sampler state
+    /**************************************************************************
+    *** [I6] . Create ds state, blend state, rasterizer and sampler states
+    **************************************************************************/
     
-    // Now we will need to create some Direct3D 11 states, we need a depth stencil desc
-    D3D11_DEPTH_STENCIL_DESC depthStencilDesc = 
+    // Now we will need to create some D3D11 states, we need a ds desc
+    D3D11_DEPTH_STENCIL_DESC dsDesc = 
     {
         .DepthEnable = true,
         D3D11_DEPTH_WRITE_MASK_ALL,
@@ -934,15 +1044,15 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
     
     // To make the depth stencil state
     if (FAILED(ID3D11Device_CreateDepthStencilState(engine.device, 
-                                                    &depthStencilDesc, 
-                                                    &engine.depthStencilState)))
+                                                    &dsDesc, 
+                                                    &engine.dss)))
     {
         exit(1);
 	}
     
-    // We need an array of render target blend descs because we could potentially
-    // render to 8 render targets at once, so we are able to specify 8 blend states
-    // But we will only be using one for now -> UPDATE THIS IF YOU EVER CHANGE THAT <-
+    // We need an array of render target blend descs. We could potentially
+    // render up to 8 render targets at once, hence 8 blend states.
+    // But we will only be using one.
     D3D11_RENDER_TARGET_BLEND_DESC renderTargetBlendDesc = 
     {
         .BlendEnable = true,
@@ -955,9 +1065,8 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
         .RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL,
     };
     
-    // We will be needing a blend desc, this structure has an array of render target
-    // blend desc as describe above, so we will clear this to zero to avoid having any
-    // garbage set on that array.
+    // We will be needing a blend desc, it has an array of render targets
+    // So we will clear this to zero to avoid having garbage set.
     D3D11_BLEND_DESC blendDesc;
     memset(&blendDesc, 0, sizeof(blendDesc));
     
@@ -1017,7 +1126,9 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
         exit(1);
 	}	
     
-    // [I7] . Create vertex shader and pixel shader
+    /**************************************************************************
+    *** [I7] . Create vertex shader and pixel shader
+    **************************************************************************/
     
     // First we will declare the vertex shader code
     char *vertexShaderSource = 
@@ -1053,15 +1164,16 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
         "}";
     
     // Then we will compile the vertex shader
-    ID3DBlob *compiledVertexShader;
+    ID3DBlob *compiledVS;
     ID3DBlob *errorVertexMessages;
     if (FAILED(D3DCompile(vertexShaderSource, strlen(vertexShaderSource) + 1,
                           0, 0, 0, "vs_main", "vs_5_0",
-                          0, 0, &compiledVertexShader, &errorVertexMessages)))
+                          0, 0, &compiledVS, &errorVertexMessages)))
     {
         if (errorVertexMessages)
         {
-            char *msg = (char *)(ID3D10Blob_GetBufferPointer(errorVertexMessages));
+            char *msg = (char *)
+            (ID3D10Blob_GetBufferPointer(errorVertexMessages));
 			OutputDebugStringA(msg);
             exit(1);
         }
@@ -1070,15 +1182,13 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
             exit(1);
         }
     }
-	else
-    {
-        // And create the vertex shader if compilation went ok
-		ID3D11Device_CreateVertexShader(engine.device,
-                                        ID3D10Blob_GetBufferPointer(compiledVertexShader),
-                                        ID3D10Blob_GetBufferSize(compiledVertexShader),
-                                        NULL,
-                                        &engine.vertexShader);
-	}
+    
+    // And create the vertex shader if compilation went ok
+	ID3D11Device_CreateVertexShader(engine.device,
+                                    ID3D10Blob_GetBufferPointer(compiledVS),
+                                    ID3D10Blob_GetBufferSize(compiledVS),
+                                    NULL,
+                                    &engine.vertexShader);
     
     // Then the pixel shader code
     char *pixelShaderSource = 
@@ -1098,15 +1208,16 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
         "}";
     
     // And compilation of the pixel shader
-    ID3DBlob *compiledPixelShader;
+    ID3DBlob *compiledPS;
     ID3DBlob *errorPixelMessages;
     if (FAILED(D3DCompile(pixelShaderSource, strlen(pixelShaderSource) + 1,
                           0, 0, 0, "ps_main", "ps_5_0",
-                          0, 0, &compiledPixelShader, &errorPixelMessages)))
+                          0, 0, &compiledPS, &errorPixelMessages)))
     {
         if (errorPixelMessages)
         {
-            char *msg = (char *)(ID3D10Blob_GetBufferPointer(errorPixelMessages));
+            char *msg = (char *)
+            (ID3D10Blob_GetBufferPointer(errorPixelMessages));
 			OutputDebugStringA(msg);
             exit(1);
         }
@@ -1115,46 +1226,57 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
             exit(1);
         }
     }
-	else
-    {
-        // And create the pixel shader if compilation went ok
-		ID3D11Device_CreatePixelShader(engine.device,
-                                       ID3D10Blob_GetBufferPointer(compiledPixelShader),
-                                       ID3D10Blob_GetBufferSize(compiledPixelShader),
-                                       NULL,
-                                       &engine.pixelShader);
-	}
+    // And create the pixel shader if compilation went ok
+	ID3D11Device_CreatePixelShader(engine.device,
+                                   ID3D10Blob_GetBufferPointer(compiledPS),
+                                   ID3D10Blob_GetBufferSize(compiledPS),
+                                   NULL,
+                                   &engine.pixelShader);
     
-    // [I8] . Create the input layout
+    /**************************************************************************
+    *** [I8] . Create the input layout
+    **************************************************************************/
     
-    // Make the input element desc array that describes the vertex input layout we will be using
+    // Make the input element desc array that describes the vertex input 
+    // layout we will be using
     D3D11_INPUT_ELEMENT_DESC inputElementDesc[] =
     {
-        { "POS", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-        { "TEX", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-        { "COL", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+        { "POS", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 
+            D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+        
+        { "TEX", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 
+            D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+        
+        { "COL", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 
+            D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
     };
     
     // And create the input layout
+    void *vsPointer = ID3D10Blob_GetBufferPointer(compiledVS);
+    u32 vsSize = (u32)ID3D10Blob_GetBufferSize(compiledVS);
+    
     if (FAILED(ID3D11Device_CreateInputLayout(engine.device,
                                               inputElementDesc,
                                               array_count(inputElementDesc),
-                                              ID3D10Blob_GetBufferPointer(compiledVertexShader),
-                                              ID3D10Blob_GetBufferSize(compiledVertexShader),
+                                              vsPointer,
+                                              vsSize,
                                               &engine.inputLayout)))
     {
         exit(1);
 	}
     
-    // [I9] . Create vertex buffer and constant buffer
+    /**************************************************************************
+     *** [I9] . Create vertex buffer and constant buffer
+    **************************************************************************/
     
     // Limit the number of concurrent rendered sprites to improve performance
     uint32_t maxAllowedRenderedSprites = 10000;
     
-    // To reuse the buffer later and update its content, it has to be big enough 
-    // to hold maxAllowedRenderedSprites worth of sprites.
+    // To reuse the buffer later to update its content, it has to be big  
+    // enough to hold maxAllowedRenderedSprites worth of sprites.
     // Each sprite requires 6 vertices, each with sizeof(Vertex3D) bytes
-    uint32_t vertexBufferSize = maxAllowedRenderedSprites * 6 * sizeof(Vertex3D);
+    uint32_t vertexBufferSize = 
+        maxAllowedRenderedSprites * 6 * sizeof(Vertex3D);
     
     // Then we describe the vertex buffer that we want
     D3D11_BUFFER_DESC vertexBufferDesc =
@@ -1176,12 +1298,14 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
 		exit(1);
 	}
     
-    // A constant buffer represents a single data structure, thus no stride is needed
+    // A constant buffer represents a single data structure
+    // thus no stride is needed
     // Unlike vertex and index buffers, which represent arrays of structures
     uint32_t constantBufferStride = 0;
     
-    // We will use this constant buffer to upload the World View Projection matrix to
-    // the vertex shader stage of the pipeline, thus the vertexConstantBufferDesc name
+    // We will use this constant buffer to upload the World View Projection 
+    // matrix to the vertex shader stage of the pipeline, thus the 
+    // vertexConstantBufferDesc name
     D3D11_BUFFER_DESC vertexConstantBufferDesc =
 	{
 		sizeof(VertexConstantBuffer),
@@ -1196,22 +1320,30 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
 	if (FAILED(ID3D11Device_CreateBuffer(engine.device,
                                          &vertexConstantBufferDesc, 
                                          0,
-                                         &engine.vertexConstantBuffer)))
+                                         &engine.vertexCBuffer)))
 	{
 		exit(1);
 	}
     
-    // [I10] . Create the render command arrays
+    /**************************************************************************
+     *** [I10] . Create the render command arrays
+    **************************************************************************/
     
     // Create an array of RenderCommand's
-    engine.renderCommands = (RenderCommand *)malloc(maxAllowedRenderedSprites * sizeof(RenderCommand));
+    engine.renderCommands = (RenderCommand *)
+        malloc(maxAllowedRenderedSprites * sizeof(RenderCommand));
     engine.renderCommandsPushedCount = 0;
     
-    // [RUNTIME]
+    /**************************************************************************
+    *** [RUNTIME]
+    **************************************************************************/
+    
     engine.running = true;
     while (engine.running)
     {
-        // [R1] . Process Windows messages
+        /**********************************************************************
+        ***  [R1] . Process Windows messages
+        **********************************************************************/
         
         MSG message;
         while (PeekMessageA(&message, NULL, 0, 0, PM_REMOVE))
@@ -1223,7 +1355,10 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
         // Call update for the app
         update();
         
-        // [R2] . Resize the swap chain and buffers if the window size changed 
+        /**********************************************************************
+        *** [R2] . Resize the swapchain and buffers if the window size changed
+        **********************************************************************/
+        
         RECT rect;
         if (!GetClientRect(engine.window, &rect))
         {
@@ -1242,12 +1377,12 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
         {
             engine.backBufferSize = backBufferSize;
             
-            // Release render target view, depth stencil view, back buffer texture and
-            // depth stencil buffer texture
-            ID3D11RenderTargetView_Release(engine.renderTargetView);
-            ID3D11DepthStencilView_Release(engine.depthStencilView);
-            ID3D11Texture2D_Release(engine.backBufferTexture);
-            ID3D11Texture2D_Release(engine.depthStencilBufferTexture);
+            // Release render target view, depth stencil view
+            // back buffer texture and depth stencil buffer texture
+            ID3D11RenderTargetView_Release(engine.rtv);
+            ID3D11DepthStencilView_Release(engine.dsv);
+            ID3D11Texture2D_Release(engine.bbTexture);
+            ID3D11Texture2D_Release(engine.dsbTexture);
             
             // Resize buffers
             IDXGISwapChain_ResizeBuffers(engine.swapChain,
@@ -1261,16 +1396,18 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
             if (FAILED(IDXGISwapChain_GetBuffer(engine.swapChain, 
                                                 0, 
                                                 &IID_ID3D11Texture2D, 
-                                                (void **)&engine.backBufferTexture)))
+                                                (void **)
+                                                &engine.bbTexture)))
             {
                 exit(1);
             }
             
             // Now we can create the views, first the render target view
             if (FAILED(ID3D11Device_CreateRenderTargetView(engine.device, 
-                                                           (ID3D11Resource *)engine.backBufferTexture, 
+                                                           (ID3D11Resource *)
+                                                           engine.bbTexture, 
                                                            0,
-                                                           &engine.renderTargetView)))
+                                                           &engine.rtv)))
             {
                 exit(1);
             }
@@ -1278,43 +1415,51 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
             // Create new depth stencil buffer texture
             
             // Update the description to have the new width and height
-            depthStencilBufferTexture2DDesc.Width = (UINT)backBufferSize.x;
-            depthStencilBufferTexture2DDesc.Height = (UINT)backBufferSize.y;
+            dsbTexture2DDesc.Width = (UINT)backBufferSize.x;
+            dsbTexture2DDesc.Height = (UINT)backBufferSize.y;
             
             // We create the texture for the depth stencil buffer
             if (FAILED(ID3D11Device_CreateTexture2D(engine.device, 
-                                                    &depthStencilBufferTexture2DDesc, 
+                                                    &dsbTexture2DDesc, 
                                                     0, 
-                                                    &engine.depthStencilBufferTexture)))
+                                                    &engine.dsbTexture)))
             {
                 exit(1);
             }
             
             // Create depth stencil view
             if (FAILED(ID3D11Device_CreateDepthStencilView(engine.device, 
-                                                           (ID3D11Resource *)engine.depthStencilBufferTexture, 
-                                                           &depthStencilViewDesc, 
-                                                           &engine.depthStencilView)))
+                                                           (ID3D11Resource *)
+                                                           engine.dsbTexture, 
+                                                           &dsvDesc, 
+                                                           &engine.dsv)))
             {
                 exit(1);
             }
         }
         
-        // [R3] . Do the rendering
         
-        // We calculate the number of vertices we will draw, that is 6 per sprite, each render command is
-        // a sprite, so that makes, renderCommandsPushedCount * 6 = verticesCount
+        /**********************************************************************
+        *** [R3] . Do the rendering
+        **********************************************************************/
+        
+        // We calculate the number of vertices we will draw
+        // that is 6 per sprite, each render command is a sprite, so that 
+        // makes, renderCommandsPushedCount * 6 = verticesCount
         u32 verticesCount = 6 * engine.renderCommandsPushedCount;
         
-        Vertex3D *vertices = (Vertex3D *)malloc(verticesCount * sizeof(Vertex3D));
+        Vertex3D *vertices = (Vertex3D *)
+            malloc(verticesCount * sizeof(Vertex3D));
         u32 vertexIndex = 0;
         
 #if 0
         // Sort commands based on layer
         
         // Build sort array
-        SortIndex *sortArray = (SortIndex *)malloc(engine.renderCommandsPushedCount * sizeof(SortIndex));
-        memset(sortArray, 0, engine.renderCommandsPushedCount * sizeof(SortIndex));
+        SortIndex *sortArray = (SortIndex *)
+            malloc(engine.renderCommandsPushedCount * sizeof(SortIndex));
+        memset(sortArray, 0, 
+            engine.renderCommandsPushedCount * sizeof(SortIndex));
         
         for (u32 i = 0; i < engine.renderCommandsPushedCount; ++i)
         {
@@ -1326,7 +1471,8 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
         quick_sort_indices(sortArray, 0, engine.renderCommandsPushedCount-1);
 #endif
         
-        // Go through the entire render commands array and produce the vertices for each command
+        // Go through the entire render commands array and produce the 
+        // vertices for each command
         for (u32 i = 0; i < engine.renderCommandsPushedCount; ++i)
         {
 #if 0
@@ -1337,34 +1483,34 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
             u32 actualIndex = i;
 #endif
             
-            RenderCommand *command = engine.renderCommands + actualIndex;
+            RenderCommand *cmd = engine.renderCommands + actualIndex;
             
             Vertex3D a =
             {
-                command->pos.x, command->pos.y, command->layer,
-                command->uv.min.x, command->uv.min.y,
-                command->col.r, command->col.g, command->col.b, command->col.a
+                cmd->pos.x, cmd->pos.y, cmd->layer,
+                cmd->uv.min.x, cmd->uv.min.y,
+                cmd->col.r, cmd->col.g, cmd->col.b, cmd->col.a
             };
             
             Vertex3D b =
             {
-                command->pos.x + command->size.x, command->pos.y, command->layer,
-                command->uv.max.x, command->uv.min.y,
-                command->col.r, command->col.g, command->col.b, command->col.a
+                cmd->pos.x+cmd->size.x, cmd->pos.y, cmd->layer,
+                cmd->uv.max.x, cmd->uv.min.y,
+                cmd->col.r, cmd->col.g, cmd->col.b, cmd->col.a
             };
             
             Vertex3D c =
             {
-                command->pos.x + command->size.x, command->pos.y + command->size.y, command->layer,
-                command->uv.max.x, command->uv.max.y,
-                command->col.r, command->col.g, command->col.b, command->col.a
+                cmd->pos.x+cmd->size.x, cmd->pos.y+cmd->size.y, cmd->layer,
+                cmd->uv.max.x, cmd->uv.max.y,
+                cmd->col.r, cmd->col.g, cmd->col.b, cmd->col.a
             };
             
             Vertex3D d =
             {
-                command->pos.x, command->pos.y + command->size.y, command->layer,
-                command->uv.min.x, command->uv.max.y,
-                command->col.r, command->col.g, command->col.b, command->col.a
+                cmd->pos.x, cmd->pos.y+cmd->size.y, cmd->layer,
+                cmd->uv.min.x, cmd->uv.max.y,
+                cmd->col.r, cmd->col.g, cmd->col.b, cmd->col.a
             };
             
             // Copy the vertices to the vertices array
@@ -1391,7 +1537,8 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
                                 &mappedResource);
         
         // Copy the vertices into the mapped resource memory
-        memcpy(mappedResource.pData, vertices, vertexIndex * sizeof(Vertex3D));
+        memcpy(mappedResource.pData, vertices, 
+            vertexIndex * sizeof(Vertex3D));
         
         // Unmap the vertex buffer
         ID3D11DeviceContext_Unmap(engine.context,
@@ -1409,32 +1556,41 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
         // Reset the count
         engine.renderCommandsPushedCount = 0;
         
-        // [R4] . Update the World View Projection matrix
+        /**********************************************************************
+        *** [R4] . Update the World View Projection matrix
+        **********************************************************************/
+        
+        float scaleX = 2.0f / engine.backBufferSize.x;
+        float scaleY = (TOP_DOWN ? -2.0f : 2.0f) / engine.backBufferSize.y;
         Matrix4x4 wvpMatrix = 
         {
-            2.0f / engine.backBufferSize.x, 0, 0, -1,
-            0, (TOP_DOWN ? -2.0f : 2.0f) / engine.backBufferSize.y, 0, (TOP_DOWN ? 1.f : -1.f),
+            scaleX, 0, 0, -1,
+            0, scaleY, 0, (TOP_DOWN ? 1.f : -1.f),
             0, 0, .001f, 0,
             0, 0, 0, 1,
         };
         
         // Update the vertex shader constant buffer wvp matrix
-        engine.vertexConstantBufferData.WVP = wvpMatrix;
+        engine.vertexCBufferData.WVP = wvpMatrix;
         
         // Update the actual vertex shader constant buffer data
         ID3D11DeviceContext_UpdateSubresource(engine.context,
-                                              (ID3D11Resource *)engine.vertexConstantBuffer,
+                                              (ID3D11Resource *)
+                                              engine.vertexCBuffer,
                                               0,
                                               NULL,
-                                              &engine.vertexConstantBufferData,
+                                              &engine.vertexCBufferData,
                                               0,
                                               0);
         
-        // [R5] . Configure the input assembly pipeline stage
+        /**********************************************************************
+        *** [R5] . Configure the input assembly pipeline stage
+        **********************************************************************/
         
         // Set the input assembly topology to use triangle list
-        ID3D11DeviceContext_IASetPrimitiveTopology(engine.context,
-                                                   D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        D3D11_PRIMITIVE_TOPOLOGY topology = 
+            D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+        ID3D11DeviceContext_IASetPrimitiveTopology(engine.context, topology);
         
         // Set the input layout
         ID3D11DeviceContext_IASetInputLayout(engine.context,
@@ -1451,7 +1607,9 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
                                                vertexBufferStrides,
                                                vertexBufferOffsets);
         
-        // [R6] - Configure the shaders
+        /**********************************************************************
+        *** [R6] . Configure the shaders
+        **********************************************************************/
         
         // Set the vertex shader
         ID3D11DeviceContext_VSSetShader(engine.context,
@@ -1463,7 +1621,7 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
         ID3D11DeviceContext_VSSetConstantBuffers(engine.context,
                                                  0, 
                                                  1, 
-                                                 &engine.vertexConstantBuffer);
+                                                 &engine.vertexCBuffer);
         
         // Set the pixel shader
         ID3D11DeviceContext_PSSetShader(engine.context,
@@ -1481,14 +1639,20 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
         ID3D11DeviceContext_PSSetShaderResources(engine.context,
                                                  0, 
                                                  1, 
-                                                 &engine.atlasTextureShaderResourceView);
+                                                 &engine.atlasTexSRV);
         
-        // [R7] - Configure the rasterizer
+        /**********************************************************************
+        *** [R7] . Configure the rasterizer
+        **********************************************************************/
         
         // Set the viewports (only 1 atm)
         D3D11_VIEWPORT viewPorts[1] = 
         {
-            {0, 0, engine.backBufferSize.x, engine.backBufferSize.y, 0.0f, 1.0f}
+            {
+                0, 0, 
+                engine.backBufferSize.x, engine.backBufferSize.y, 
+                0.0f, 1.0f
+            }
         };
         
         ID3D11DeviceContext_RSSetViewports(engine.context,
@@ -1498,7 +1662,10 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
         // Set the scissor rects (only 1 atm)
         D3D11_RECT scissorRects[1] = 
         {
-            {0, 0, (LONG)engine.backBufferSize.x, (LONG)engine.backBufferSize.y}
+            {
+                0, 0, 
+                (LONG)engine.backBufferSize.x, (LONG)engine.backBufferSize.y
+            }
         };
         
         ID3D11DeviceContext_RSSetScissorRects(engine.context,
@@ -1509,11 +1676,13 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
         ID3D11DeviceContext_RSSetState(engine.context,
                                        engine.rasterizerState);
         
-        // [R8] - Configure the output merger
+        /**********************************************************************
+        *** [R8] . Configure the output merger
+        **********************************************************************/
         
         // Set the depth stencil state
         ID3D11DeviceContext_OMSetDepthStencilState(engine.context,
-                                                   engine.depthStencilState,
+                                                   engine.dss,
                                                    0);
         
         // Set the blend state
@@ -1525,26 +1694,30 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
         // Set the render target views (only 1 atm)
         ID3D11RenderTargetView *views[1] = 
         {
-            engine.renderTargetView
+            engine.rtv
         };
         
         ID3D11DeviceContext_OMSetRenderTargets(engine.context,
                                                1, 
                                                views,
-                                               engine.depthStencilView);
+                                               engine.dsv);
         
         // Clear the render target view and depth stencil view
         float clearColor[4] = {0,0,0,1};
         ID3D11DeviceContext_ClearRenderTargetView(engine.context,
-                                                  engine.renderTargetView, 
+                                                  engine.rtv, 
                                                   clearColor);
         
         ID3D11DeviceContext_ClearDepthStencilView(engine.context,
-                                                  engine.depthStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 
+                                                  engine.dsv, 
+                                                  D3D11_CLEAR_DEPTH | 
+                                                  D3D11_CLEAR_STENCIL, 
                                                   0, 
                                                   0);
         
-        // [R10] . Draw and present the frame
+        /**********************************************************************
+        *** [R9] . Draw and present the frame
+        **********************************************************************/
         
         ID3D11DeviceContext_Draw(engine.context,
                                  vertexIndex, 
