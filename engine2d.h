@@ -96,12 +96,11 @@
 *** [R2] . Resize the swap chain and buffers if the window size changed 
 *** [R3] . Do the rendering
 *** [R4] . Update the World View Projection matrix
-            *** [R5] . Configure the input assembly pipeline stage
-            *** [R6] . Configure the shaders
-            *** [R7] . Configure the rasterizer
-            *** [R8] . Configure the output merger
-            *** [R9] . Draw and present the frame
-            ******************************************************************************/
+*** [R5] . Configure the input assembly pipeline stage
+*** [R6] . Configure the shaders
+*** [R7] . Configure the rasterizer
+*** [R8] . Configure the output merger
+*** [R9] . Draw and present the frame           ******************************************************************************/
 
 
 /******************************************************************************
@@ -136,8 +135,6 @@
 #include <dxgi1_2.h>
 #include <d3dcompiler.h>
 
-#define STB_IMAGE_IMPLEMENTATION
-#include "w:\libs\stb_image.h"
 
 /******************************************************************************
 *** [D2] . Include C libraries to use math, string processing, etc...

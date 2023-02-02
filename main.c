@@ -3,6 +3,9 @@
 #define BACKBUFFER_HEIGHT 600
 #define WINDOW_TITLE "Runeforma"
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "w:\libs\stb_image.h"
+
 #include "engine2d.h"
 #include "datastructures.h"
 
