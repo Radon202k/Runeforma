@@ -4,4 +4,6 @@
 
 ### In progress ###
 
-### Inspired by the book "The Craft of Text Editing" written by Craig A. Finseth
+### Inspired by the books ###
+* The Craft of Text Editing by Craig A. Finseth
+* Practical Rendering and Computation with Direct3D 11 by Jack Hoxley, Jason Zink, and Matt Pettineo
