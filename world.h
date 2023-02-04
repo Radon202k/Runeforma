@@ -18,11 +18,11 @@ function void world_init(World *world)
     
     if (!testFile.exists)
     {
-        buffer = buffer_create("Scratch", "Runeforma scratch buffer");
+        buffer = buffer_create("Scratch", "Runeforma scratch buffer", (s32)strlen("Runeforma scratch buffer")+1);
     }
     else
     {
-        buffer = buffer_create(testFile.name, (char *)testFile.data);
+        buffer = buffer_create(testFile.name, (char *)testFile.data, testFile.size);
     }
     
     world->bufferChain = buffer;

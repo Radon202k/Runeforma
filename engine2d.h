@@ -186,6 +186,11 @@ typedef struct
     float x, y;
 } Vector2;
 
+typedef struct
+{
+    s32 x, y;
+} Vector2i;
+
 inline Vector2
 v2(float x, float y)
 {
@@ -203,9 +208,13 @@ typedef struct
     float x, y, z, w;
 } Vector4;
 
-typedef struct
+typedef union
 {
-    float r, g, b, a;
+    float data[4];
+    struct
+    {
+        float r, g, b, a;
+    };
 } Color;
 
 inline Color
@@ -266,12 +275,18 @@ read_file(char *filePath)
         return result;
     }
     
-    result.size = (u32)fileSize.QuadPart;
+    // Add 1 to the byte size of the file to be able to end it will a null
+    result.size = (u32)fileSize.QuadPart+1;
     
+    // Allocate the memory
     result.data = (u8 *)malloc(result.size);
     
+    // Clear it to zero
+    memset(result.data, 0, result.size);
+    
+    // Read the bytes to the memory
     DWORD bytesRead = 0;
-    if (!ReadFile(handle, result.data, result.size,
+    if (!ReadFile(handle, result.data, result.size-1,
                   &bytesRead, 0))
     {
         result.size = 0;
@@ -285,7 +300,7 @@ read_file(char *filePath)
         return result;
     }
     
-    assert(result.size == bytesRead);
+    assert(result.size-1 == bytesRead);
     result.exists = true;
     CloseHandle(handle);
     
@@ -423,6 +438,13 @@ typedef struct
 
 typedef struct
 {
+    RenderCommand *renderCommands;
+    u32 renderCommandsPushedCount;
+    
+} RenderGroup;
+
+typedef struct
+{
     char name[512];
     Vector2 size;
     Rect2 uv;
@@ -430,10 +452,10 @@ typedef struct
 
 typedef struct
 {
-    int size;
-    int atX;
-    int atY;
-    int bottom;
+    u32 size;
+    u32 atX;
+    u32 atY;
+    u32 bottom;
     u8 *bytes;
 } SpriteAtlas;
 
@@ -446,10 +468,12 @@ typedef struct
 
 typedef union
 {
-    Key all[7];
+    Key all[9];
     struct
     {
+        Key up;
         Key left;
+        Key down;
         Key right;
         Key backspace;
         Key alt;
@@ -483,8 +507,7 @@ typedef struct
     ID3D11Buffer *vertexBuffer; // Vertex buffer for input assembler
     ID3D11Buffer *vertexCBuffer; // Constant buffer for vertex shader
     VertexConstantBuffer vertexCBufferData; // Data for above
-    RenderCommand *renderCommands;
-    u32 renderCommandsPushedCount;
+    RenderGroup renderGroups[16];
     ID3D11Texture2D *atlasTexture;
     ID3D11ShaderResourceView *atlasTexSRV;
     SpriteAtlas spriteAtlas;
@@ -522,16 +545,23 @@ function void update();
 #define SPRITE_ATLAS_SIZE 4096
 #endif
 
+#ifndef CLEAR_COLOR
+#define CLEAR_COLOR rgba(.1f,.1f,.1f,1)
+#endif
+
 /*****************************************************************************
 *** [API]
 ******************************************************************************/
 
-function u8 *load_png(char *filePath, int *width, int *height)
+function u8 *load_png(char *filePath, u32 *width, u32 *height)
 {
 	u8 *result = 0;
     
-	int nrChannels;
-	unsigned char *data = stbi_load(filePath, width, height, &nrChannels, 0);
+	int w, h, nrChannels;
+	unsigned char *data = stbi_load(filePath, &w, &h, &nrChannels, 0);
+    
+    *width = w;
+    *height = h;
     
 	if (data)
 	{
@@ -539,7 +569,48 @@ function u8 *load_png(char *filePath, int *width, int *height)
 		int dataSize = (*width) * (*height) * nrChannels;
         
 		result = (u8 *)malloc(dataSize);
-		memcpy(result, data, dataSize);
+		
+        // For eall bytes
+        u8 *rowDst = result;
+        u8 *rowSrc = data;
+        
+        for (u32 j = 0; j < *height; j++)
+        {
+            u32 *pxSrc = (u32 *)rowSrc;
+            u32 *pxDst = (u32 *)rowDst;
+            
+            for (u32 i = 0; i < *width; i++)
+            {
+                u32 r = (*pxSrc >> 16) & 0xFF;
+                u32 g = (*pxSrc >> 8) & 0xFF;
+                u32 b = (*pxSrc >> 0) & 0xFF;
+                u32 a = (*pxSrc >> 24) & 0xFF;
+                float realA = (float)a / 255.0f;
+                
+                if (realA > 0 && realA < 0.5f)
+                {
+                    int y = 3;
+                }
+                
+                // Premultiply the alpha
+                r = (u32)(r * realA + .5f);
+                g = (u32)(g * realA + .5f);
+                b = (u32)(b * realA + .5f);
+                
+                *pxDst = ((r << 16) | 
+                          (g << 8) |
+                          (b << 0) |
+                          (a << 24));
+                
+                pxSrc++;
+                pxDst++;
+            }
+            
+            rowDst += *width*4;
+            rowSrc += *width*4;
+        }
+        
+        stbi_image_free(data);
 	}
 	else
 	{
@@ -584,8 +655,8 @@ sprite_create(char *filePath)
 {
     Sprite result = {0};
     
-    int spriteWidth = 0;
-    int spriteHeight = 0;
+    u32 spriteWidth = 0;
+    u32 spriteHeight = 0;
     
     u8 *bytes = load_png(filePath, &spriteWidth, &spriteHeight);
     
@@ -627,16 +698,24 @@ sprite_create(char *filePath)
     return result;
 }
 
+function RenderGroup *
+render_group_push_layer(u32 layer)
+{
+    assert(layer < array_count(engine.renderGroups));
+    return engine.renderGroups + layer;
+}
+
 function void
-base_draw_rect(float x, float y, 
+base_draw_rect(RenderGroup *group,
+               float x, float y, 
                float width, float height, 
                float minU, float minV,
                float maxU, float maxV,
                float r, float g, float b, float a,
                float layer)
 {
-    RenderCommand *command = engine.renderCommands + 
-        engine.renderCommandsPushedCount;
+    RenderCommand *command = group->renderCommands + 
+        group->renderCommandsPushedCount;
     command->pos = v2(x,y);
     command->size = v2(width,height);
     float eps = 0.001f;
@@ -644,16 +723,17 @@ base_draw_rect(float x, float y,
     command->col = rgba(r, g, b, a);
     command->layer = layer;
     
-    
-    engine.renderCommandsPushedCount++;
+    group->renderCommandsPushedCount++;
 }
 
 function void
-draw_rect(Sprite sprite,
+draw_rect(RenderGroup *group,
+          Sprite sprite,
           Vector2 pos, Vector2 size,
           Color col, float layer)
 {
-    base_draw_rect(pos.x, pos.y,
+    base_draw_rect(group, 
+                   pos.x, pos.y,
                    size.x, size.y,
                    sprite.uv.min.x, sprite.uv.min.y,
                    sprite.uv.max.x, sprite.uv.max.y,
@@ -662,11 +742,13 @@ draw_rect(Sprite sprite,
 }
 
 function void
-draw_sprite(Sprite sprite, 
+draw_sprite(RenderGroup *group,
+            Sprite sprite, 
             Vector2 pos, Vector2 scale,
             Color col, float layer)
 {
-    base_draw_rect(pos.x, pos.y,
+    base_draw_rect(group,
+                   pos.x, pos.y,
                    scale.x * sprite.size.x, scale.y * sprite.size.y,
                    sprite.uv.min.x, sprite.uv.min.y,
                    sprite.uv.max.x, sprite.uv.max.y,
@@ -704,14 +786,15 @@ LRESULT window_proc(HWND window, UINT message, WPARAM wParam, LPARAM lParam)
         {
             Key *key = 0;
             
-            if (wParam == VK_LEFT)       key = &engine.key.left;
-            else if (wParam == VK_RIGHT) key = &engine.key.right;
-            else if (wParam == VK_BACK)  key = &engine.key.backspace;
-            else if (wParam == VK_MENU)  key = &engine.key.alt;
-            else if (wParam == VK_F1)  key = &engine.key.f1;
-            else if (wParam == 'S')  key = &engine.key.s;
-            else if (wParam == VK_CONTROL)  key = &engine.key.control;
-            
+            if (wParam == VK_UP)              key = &engine.key.up;
+            else if (wParam == VK_LEFT)       key = &engine.key.left;
+            else if (wParam == VK_DOWN)       key = &engine.key.down;
+            else if (wParam == VK_RIGHT)      key = &engine.key.right;
+            else if (wParam == VK_BACK)       key = &engine.key.backspace;
+            else if (wParam == VK_MENU)       key = &engine.key.alt;
+            else if (wParam == VK_F1)         key = &engine.key.f1;
+            else if (wParam == 'S')           key = &engine.key.s;
+            else if (wParam == VK_CONTROL)    key = &engine.key.control;
             
             if (key)
             {
@@ -1053,9 +1136,10 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev,
     D3D11_RENDER_TARGET_BLEND_DESC renderTargetBlendDesc = 
     {
         .BlendEnable = true,
-        .SrcBlend = D3D11_BLEND_SRC_ALPHA,
+        .SrcBlend = D3D11_BLEND_ONE,
         .DestBlend = D3D11_BLEND_INV_SRC_ALPHA,
         .BlendOp = D3D11_BLEND_OP_ADD,
+        // Use premultiplied alpha
         .SrcBlendAlpha = D3D11_BLEND_ONE,
         .DestBlendAlpha = D3D11_BLEND_INV_SRC_ALPHA,
         .BlendOpAlpha = D3D11_BLEND_OP_ADD,
@@ -1327,9 +1411,18 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev,
     **************************************************************************/
     
     // Create an array of RenderCommand's
-    engine.renderCommands = (RenderCommand *)
-        malloc(maxAllowedRenderedSprites * sizeof(RenderCommand));
-    engine.renderCommandsPushedCount = 0;
+    u32 perGroupCount = maxAllowedRenderedSprites /
+        array_count(engine.renderGroups);
+    
+    for (u32 i = 0; i < array_count(engine.renderGroups); i++)
+    {
+        RenderGroup *group = engine.renderGroups + i;
+        
+        group->renderCommands = (RenderCommand *)
+            malloc(perGroupCount * sizeof(RenderCommand));
+        
+        group->renderCommandsPushedCount = 0;
+    }
     
     /**************************************************************************
     *** [RUNTIME]
@@ -1440,87 +1533,87 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev,
         *** [R3] . Do the rendering
         **********************************************************************/
         
-        // We calculate the number of vertices we will draw
-        // that is 6 per sprite, each render command is a sprite, so that 
-        // makes, renderCommandsPushedCount * 6 = verticesCount
-        u32 verticesCount = 6 * engine.renderCommandsPushedCount;
+        // Declare a variable to hold the count of all vertices produced
+        u32 allVerticesCount = 0;
         
+        // Count how many vertices in total was pushed
+        // TODO: Optimize by holding a count variable at push time
+        for (u32 i = 0; i < array_count(engine.renderGroups); i++)
+        {
+            RenderGroup *group = engine.renderGroups + i;
+            allVerticesCount += 6*group->renderCommandsPushedCount;
+        }
+        
+        // Allocate array to hold all vertices
         Vertex3D *vertices = (Vertex3D *)
-            malloc(verticesCount * sizeof(Vertex3D));
-        u32 vertexIndex = 0;
+            malloc(allVerticesCount * sizeof(Vertex3D));
         
-#if 0
-        // Sort commands based on layer
+        // Declare a variable to count vertices copied so far
+        s32 verticesCopiedSoFar = 0;
         
-        // Build sort array
-        SortIndex *sortArray = (SortIndex *)
-            malloc(engine.renderCommandsPushedCount * sizeof(SortIndex));
-        memset(sortArray, 0, 
-            engine.renderCommandsPushedCount * sizeof(SortIndex));
-        
-        for (u32 i = 0; i < engine.renderCommandsPushedCount; ++i)
+        // For each render group
+        for (u32 j = 0; j < array_count(engine.renderGroups); j++)
         {
-            sortArray[i].comparisonValue = engine.renderCommands[i].layer;
-            sortArray[i].index = i;
+            RenderGroup *group = engine.renderGroups + j;
+            
+            if (group->renderCommandsPushedCount > 0)
+            {
+                u32 verticesCount = 6 * group->renderCommandsPushedCount;
+                
+                // Start the count from all vertices so far
+                u32 vertexIndex = verticesCopiedSoFar;
+                
+                // Go through the entire render commands array and produce the 
+                // vertices for each command
+                for (u32 i = 0; i < group->renderCommandsPushedCount; ++i)
+                {
+                    RenderCommand *cmd = group->renderCommands + i;
+                    
+                    Vertex3D a =
+                    {
+                        cmd->pos.x, cmd->pos.y, cmd->layer,
+                        cmd->uv.min.x, cmd->uv.min.y,
+                        cmd->col.r, cmd->col.g, cmd->col.b, cmd->col.a
+                    };
+                    
+                    Vertex3D b =
+                    {
+                        cmd->pos.x+cmd->size.x, cmd->pos.y, cmd->layer,
+                        cmd->uv.max.x, cmd->uv.min.y,
+                        cmd->col.r, cmd->col.g, cmd->col.b, cmd->col.a
+                    };
+                    
+                    Vertex3D c =
+                    {
+                        cmd->pos.x+cmd->size.x, cmd->pos.y+cmd->size.y, cmd->layer,
+                        cmd->uv.max.x, cmd->uv.max.y,
+                        cmd->col.r, cmd->col.g, cmd->col.b, cmd->col.a
+                    };
+                    
+                    Vertex3D d =
+                    {
+                        cmd->pos.x, cmd->pos.y+cmd->size.y, cmd->layer,
+                        cmd->uv.min.x, cmd->uv.max.y,
+                        cmd->col.r, cmd->col.g, cmd->col.b, cmd->col.a
+                    };
+                    
+                    // Copy the vertices to the vertices array
+                    vertices[vertexIndex++] = a;
+                    vertices[vertexIndex++] = (TOP_DOWN ? b : c);
+                    vertices[vertexIndex++] = (TOP_DOWN ? c : b);
+                    
+                    vertices[vertexIndex++] = a;
+                    vertices[vertexIndex++] = (TOP_DOWN ? c : d);
+                    vertices[vertexIndex++] = (TOP_DOWN ? d : c);
+                }
+                
+                // Add to copied so far count
+                verticesCopiedSoFar += verticesCount;
+                
+                // Reset the count
+                group->renderCommandsPushedCount = 0;
+            }
         }
-        
-        // Sort it based on comparison value
-        quick_sort_indices(sortArray, 0, engine.renderCommandsPushedCount-1);
-#endif
-        
-        // Go through the entire render commands array and produce the 
-        // vertices for each command
-        for (u32 i = 0; i < engine.renderCommandsPushedCount; ++i)
-        {
-#if 0
-            // Get index from sorted array
-            u32 actualIndex = sortArray[i].index;
-#else
-            // Get index from sorted array
-            u32 actualIndex = i;
-#endif
-            
-            RenderCommand *cmd = engine.renderCommands + actualIndex;
-            
-            Vertex3D a =
-            {
-                cmd->pos.x, cmd->pos.y, cmd->layer,
-                cmd->uv.min.x, cmd->uv.min.y,
-                cmd->col.r, cmd->col.g, cmd->col.b, cmd->col.a
-            };
-            
-            Vertex3D b =
-            {
-                cmd->pos.x+cmd->size.x, cmd->pos.y, cmd->layer,
-                cmd->uv.max.x, cmd->uv.min.y,
-                cmd->col.r, cmd->col.g, cmd->col.b, cmd->col.a
-            };
-            
-            Vertex3D c =
-            {
-                cmd->pos.x+cmd->size.x, cmd->pos.y+cmd->size.y, cmd->layer,
-                cmd->uv.max.x, cmd->uv.max.y,
-                cmd->col.r, cmd->col.g, cmd->col.b, cmd->col.a
-            };
-            
-            Vertex3D d =
-            {
-                cmd->pos.x, cmd->pos.y+cmd->size.y, cmd->layer,
-                cmd->uv.min.x, cmd->uv.max.y,
-                cmd->col.r, cmd->col.g, cmd->col.b, cmd->col.a
-            };
-            
-            // Copy the vertices to the vertices array
-            vertices[vertexIndex++] = a;
-            vertices[vertexIndex++] = (TOP_DOWN ? b : c);
-            vertices[vertexIndex++] = (TOP_DOWN ? c : b);
-            
-            vertices[vertexIndex++] = a;
-            vertices[vertexIndex++] = (TOP_DOWN ? c : d);
-            vertices[vertexIndex++] = (TOP_DOWN ? d : c);
-        }
-        
-        assert(verticesCount == vertexIndex);
         
         // Copy the data to the vertex buffer
         D3D11_MAPPED_SUBRESOURCE mappedResource;
@@ -1535,7 +1628,7 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev,
         
         // Copy the vertices into the mapped resource memory
         memcpy(mappedResource.pData, vertices, 
-            vertexIndex * sizeof(Vertex3D));
+               allVerticesCount * sizeof(Vertex3D));
         
         // Unmap the vertex buffer
         ID3D11DeviceContext_Unmap(engine.context,
@@ -1549,9 +1642,6 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev,
         
         // Free the vertices array
         free(vertices);
-        
-        // Reset the count
-        engine.renderCommandsPushedCount = 0;
         
         /**********************************************************************
         *** [R4] . Update the World View Projection matrix
@@ -1700,10 +1790,9 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev,
                                                engine.dsv);
         
         // Clear the render target view and depth stencil view
-        float clearColor[4] = {0,0,0,1};
         ID3D11DeviceContext_ClearRenderTargetView(engine.context,
                                                   engine.rtv, 
-                                                  clearColor);
+                                                  CLEAR_COLOR.data);
         
         ID3D11DeviceContext_ClearDepthStencilView(engine.context,
                                                   engine.dsv, 
@@ -1716,9 +1805,7 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev,
         *** [R9] . Draw and present the frame
         **********************************************************************/
         
-        ID3D11DeviceContext_Draw(engine.context,
-                                 vertexIndex, 
-                                 0);
+        ID3D11DeviceContext_Draw(engine.context, allVerticesCount, 0);
         
         // Clear the render command vector
         // m_RenderCommands.clear();

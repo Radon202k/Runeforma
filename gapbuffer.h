@@ -1,26 +1,29 @@
 #pragma once
 
 function void
-gap_buffer_init(GapBuffer *buffer, s32 size, char *contents, s32 *point)
+gap_buffer_init(GapBuffer *buffer, s32 *point,
+                s32 dataSize)
 {
-    buffer->arraySize = size;
-    buffer->array = (char *)malloc(buffer->arraySize);
-    memset(buffer->array, 0, buffer->arraySize);
-    
-    s32 length = (s32)strlen(contents);
-    strcpy_s(buffer->array, buffer->arraySize, contents);
-    
-    buffer->gapLeft = length;
+    // Set the gap to be at the end
+    buffer->gapLeft = dataSize;
     buffer->gapRight = buffer->arraySize;
     
-    *point = length;
+    // Set the point to be at the end
+    *point = dataSize;
+}
+
+function s32
+gap_buffer_current_gap_size(GapBuffer *buffer)
+{
+    s32 gapSize = (buffer->gapRight - buffer->gapLeft);
+    return gapSize;
 }
 
 function s32
 gap_buffer_current_size(GapBuffer *buffer)
 {
     assert(buffer->gapRight >= buffer->gapLeft);
-    s32 gapSize = (buffer->gapRight - buffer->gapLeft);
+    s32 gapSize = gap_buffer_current_gap_size(buffer);
     s32 result = buffer->arraySize - gapSize;
     return result;
 }
@@ -210,174 +213,4 @@ test_gap_buffer_insert_char()
     assert(point == 6);
     
     // Add more test cases as needed
-}
-
-function void
-gap_buffer_draw_with_gap(GapBuffer *buffer, s32 point,
-                         Vector2 origin, Vector2 bucketSize)
-{
-    // Store local character position to handle automatic line wrap 
-    Vector2 bucketPos = v2(origin.x, origin.y);
-    
-    // Draw each bucket
-    for (s32 i = 0; i <= buffer->arraySize; ++i)
-    {
-        //  Draw the bucket of the gap buffer
-        if (i < buffer->arraySize)
-        {
-            Color bucketColor = rgba(.5f,.5f,.5f,1);
-            if (i >= buffer->gapLeft && i < buffer->gapRight)
-            {
-                bucketColor = rgba(1.0f,.4f,.4f,1);
-            }
-            
-            // Make it a different color if the cursor is in this bucket
-            if (gap_buffer_user_to_gap_coords(buffer, point) == i)
-            {
-                bucketColor = rgba(.4f,.4f,1.0f,1);
-            }
-            
-            draw_rect(editor.white, bucketPos, bucketSize, bucketColor, 0);
-            
-            // If there is contents in it, draw
-            char *c = buffer->array + i;
-            if (c && 
-                *c != 10 && // carriage return
-                *c != 13)   // new line
-            {
-                draw_char(*c, bucketPos, bucketSize.x, rgba(0,0,0,1), 0);
-            }
-        }
-        
-        // Draw the left and right positions of the gap 
-        if (i == buffer->gapLeft || i == (buffer->gapRight))
-        {
-            // Get a string for the number using _itoa_s
-            char number[32] = {0};
-            _itoa_s(i, number, 32, 10);
-            
-            // Claculate the char size and position
-            Vector2 charSize = bucketSize;
-            Vector2 charPos = bucketPos;
-            
-            charPos.x -= strlen(number) * 0.5f*charSize.x;
-            
-            draw_string(number, v2(charPos.x, charPos.y - 16), charSize.x, rgba(1,1,0,1), 1);
-        }
-        
-        // Advance the width of the bucket for the position of next one start at the end of this one
-        bucketPos.x += (bucketSize.x + 1);
-        
-        if ((bucketPos.x + bucketSize.x) > engine.backBufferSize.x)
-        {
-            bucketPos.x = origin.x;
-            bucketPos.y -= (bucketSize.y + 1);
-        }
-    }
-}
-
-function Vector2
-gap_buffer_point_to_screen_pos(GapBuffer *buffer, s32 point, 
-                               Vector2 origin, Vector2 bucketSize)
-{
-    s32 bufferSize = gap_buffer_current_size(buffer);
-    
-    Vector2 bucketPos = v2(origin.x, origin.y);
-    
-    s32 lim = point;
-    
-    // calculate string position without the gap
-    for (s32 i = 0; i <= lim; ++i)
-    {
-        // If there is contents in it, draw
-        s32 gapI = gap_buffer_user_to_gap_coords(buffer, i);
-        
-        char *c = 0;
-        if (gapI < buffer->arraySize)
-        {
-            c = buffer->array + gapI;
-        }
-        
-        if (c && *c == 13) // Carriage return 
-        {
-            // ignore
-        }
-        else
-        {
-            bucketPos.x += bucketSize.x;
-            if (((bucketPos.x + bucketSize.x) > engine.backBufferSize.x) ||
-                (c && *c == 10))
-            {
-                bucketPos.x = 0;
-                bucketPos.y -= bucketSize.y;
-            }
-        }
-        
-    }
-    
-    return bucketPos;
-}
-
-function void
-gap_buffer_draw(GapBuffer *buffer, s32 point, 
-                Vector2 origin, Vector2 bucketSize)
-{
-    s32 bufferSize = gap_buffer_current_size(buffer);
-    
-    Vector2 bucketPos = v2(origin.x, origin.y);
-    
-    // Draw the string without the gap
-    for (s32 i = 0; i <= bufferSize; ++i)
-    {
-        // If there is contents in it, draw
-        s32 gapI = gap_buffer_user_to_gap_coords(buffer, i);
-        
-        char *c = 0;
-        if (gapI < buffer->arraySize)
-        {
-            c = buffer->array + gapI;
-            
-            if (c && 
-                *c != 10 && // carriage return
-                *c != 13)   // new line
-            {
-                // Draw the bucket of the gap buffer
-                Color bucketColor = rgba(.1f,.1f,.1f,1);
-                if (i == point)
-                {
-                    bucketColor = rgba(.4f,.4f,1.0f,1);
-                }
-                else if (*c == ' ' || *c == '.')
-                {
-                    bucketColor = rgba(.2f,.2f,.2f,1);
-                }
-                
-                draw_rect(editor.white, bucketPos, bucketSize, bucketColor, 0);
-                
-                if (c)
-                {
-                    draw_char(*c, bucketPos, bucketSize.x, rgba(.9f,.9f,.7f,1), 0);
-                }
-            }
-        }
-        
-        // Draw the point position
-        if (point == i)
-        {
-            draw_rect(editor.white, v2(bucketPos.x - 0.5f*bucketSize.x, bucketPos.y-2), 
-                      v2(bucketSize.x, 2), rgba(1,0,0,1), 1);
-        }
-        
-        
-        if (c && *c != 10) // carriage return
-        {
-            bucketPos.x += bucketSize.x;
-            if (((bucketPos.x + bucketSize.x) > engine.backBufferSize.x) ||
-                (c && *c == 13))
-            {
-                bucketPos.x = 0;
-                bucketPos.y -= bucketSize.y;
-            }
-        }
-    }
 }
