@@ -9,6 +9,10 @@
 
 #include "engine2d.h"
 
+global bool sasukeUploaded;
+global Sprite sasuke;
+global TCHAR exePath[MAX_PATH];
+
 #include "string.h"
 #include "subeditor.h"
 #include "display.h"
@@ -16,9 +20,22 @@
 
 function void init()
 {
-    editor.font = sprite_create( "images/font.png");
-    editor.white = sprite_create( "images/white.png");
-    editor.naruto = sprite_create( "images/naruto.png");
+    char narutoPath[260];
+    build_absolute_path(narutoPath, 260, "images/naruto.png");
+    
+    char whitePath[260];
+    build_absolute_path(whitePath, 260, "images/white.png");
+    
+    char fontPath[260];
+    build_absolute_path(fontPath, 260, "images/font.png");
+    
+    editor.font = sprite_create(fontPath);
+    editor.white = sprite_create(whitePath);
+    editor.naruto = sprite_create(narutoPath);
+    
+    assert(editor.font.exists);
+    assert(editor.white.exists);
+    assert(editor.naruto.exists);
     
     // Tests
     test_gap_buffer_insert_char();
@@ -33,92 +50,31 @@ function void update()
     float winHeight = engine.backBufferSize.y;
     
     Buffer *buffer = editor.world.currentBuffer;
+    s32 bufferSize = gap_buffer_current_size(&buffer->gapBuffer);
     
-    s32 bufferSize = gap_buffer_current_size(&buffer->contents);
-    
-    // Handle keyboard input
-    
-    if (engine.key.up.pressed)
-    {
-        if (!buffer_search_backward("\n"))
-        {
-            buffer_point_set(0);
-        }
-    }
-    
-    if (engine.key.down.pressed)
-    {
-        if (!buffer_search_forward("\n"))
-        {
-            buffer_point_set(gap_buffer_current_size(&buffer->contents));
-        }
-    }
-    
-    if (engine.key.left.pressed)
-    {
-        if (buffer->point > 0)
-        {
-            buffer->point--;
-        }
-    }
-    
-    if (engine.key.right.pressed)
-    {
-        if (buffer->point < bufferSize)
-        {
-            buffer->point++;
-        }
-    }
-    
-    if (engine.inputCharEntered)
-    { 
-        char c = engine.inputChar;
-        if (c != 8 &&  // backspace
-            (c == 10 || c == 13) || // newline / carriage return
-            (c >= 32 && c < 127))  
-        {
-            if (c == 13 || c == 10)
-            {
-                c = 10;
-                buffer->numLines++;
-            }
-            else
-            {
-                buffer->numChars++;
-            }
-            
-            gap_buffer_insert_char(&buffer->contents, c, &buffer->point);
-        }
-    }
-    
-    if (engine.key.backspace.pressed)
-    {
-        if (buffer->point > 0)
-        {
-            gap_buffer_delete_char(&buffer->contents, &buffer->point);
-        }
-    }
-    
-    if (engine.key.alt.down)
-    {
-        if (engine.key.f1.pressed)
-        {
-            editor.showGap = !editor.showGap;
-        }
-    }
-    
-    if (engine.key.control.down)
-    {
-        if (engine.key.s.pressed)
-        {
-            buffer_save(editor.world.currentBuffer);
-        }
-    }
+    handle_user_navigation();
     
     // Draw gap buffer buckets and coordinate systems
     
-    RenderGroup *layer1 = render_group_push_layer(1);
-    RenderGroup *layer2 = render_group_push_layer(2);
+    SpriteGroup *layer1 = sprite_group_push_layer(1);
+    SpriteGroup *layer2 = sprite_group_push_layer(2);
+    
+    if (sasukeUploaded)
+    {
+        draw_rect(layer2, sasuke, v2(300,0), v2(200,200), rgba(1,1,1,1), 0);
+    }
+    
+    base_draw_line(0, 0, 
+                   engine.backBufferSize.x, engine.backBufferSize.y,
+                   1, 0, 1, 1,
+                   100);
+    
+    
+    base_draw_line(0, 0, 
+                   engine.mouse.pos.x, engine.mouse.pos.y,
+                   1, 0, 1, 1,
+                   100);
+    
     
     // Define a size to draw each bucket
     Vector2 bucketSize = v2(15,17);
@@ -126,7 +82,8 @@ function void update()
     draw_rect(layer1, editor.white, v2(0, engine.backBufferSize.y - bucketSize.y), v2(engine.backBufferSize.x, bucketSize.y),
               rgba(.7f,.7f,.7f,1), 0);
     
-    draw_string(layer1, buffer->bufferName, v2(0, 1.0f*winHeight - bucketSize.y), bucketSize.x, rgba(.95f,.95f,.95f,1), 1);
+    draw_string(layer1, editor.font,
+                buffer->bufferName, v2(0, 1.0f*winHeight - bucketSize.y), bucketSize.x, rgba(.95f,.95f,.95f,1), 1);
     
     // Calculate origin (bottom left) based on buffer size
     Vector2 origin = v2(0, 1.0f*winHeight - 2.0f*bucketSize.y);
@@ -136,18 +93,18 @@ function void update()
     
     if (editor.showGap)
     {
-        gap_buffer_draw_with_gap(&buffer->contents, buffer->point, origin, bucketSize);
+        gap_buffer_draw_with_gap(&buffer->gapBuffer, buffer->point, origin, bucketSize);
     }
     else
     {
-        gap_buffer_draw(&buffer->contents, buffer->point, origin, bucketSize);
+        gap_buffer_draw(&buffer->gapBuffer, buffer->point, origin, bucketSize);
     }
     
     // Search for occurences of the word "to"
     
     s32 *foundPositions, foundCount;
-    string_search_naive(buffer->contents.array, 
-                        buffer->contents.gapLeft, "to", 2,
+    string_search_naive(buffer->gapBuffer.storage, 
+                        buffer->gapBuffer.left, "to", 2,
                         &foundPositions, &foundCount);
     
     if (foundCount > 0)
@@ -157,7 +114,7 @@ function void update()
             s32 loc = foundPositions[i];
             
             Vector2 bucketPos = 
-                gap_buffer_point_to_screen_pos(&buffer->contents, loc, 
+                gap_buffer_point_to_screen_pos(&buffer->gapBuffer, loc, 
                                                origin, bucketSize);
             
             draw_rect(layer1, editor.white, bucketPos, 
@@ -168,7 +125,7 @@ function void update()
     Vector2i charLineCount;
     charLineCount.x = buffer->numChars;
     charLineCount.y = buffer->numLines;
-    draw_label_v2i(layer2, charLineCount, v2(0,20), 
+    draw_label_v2i(layer2, editor.font, charLineCount, v2(0,20), 
                    10, rgba(.5f,.5f,.5f,1), 0, false);
     
     // Has to free the allocated array

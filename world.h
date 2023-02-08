@@ -12,24 +12,22 @@ function void world_load(World *world)
 
 function void world_init(World *world)
 {
-    Buffer *buffer = 0;
-    
-    File testFile = read_file("test.txt");
-    
-    if (!testFile.exists)
+    char *scratchBufferName = "Scratch";
+    if (!buffer_create(scratchBufferName))
     {
-        buffer = buffer_create("Scratch", "Runeforma scratch buffer", (s32)strlen("Runeforma scratch buffer")+1);
+        exit(1);
     }
     else
     {
-        buffer = buffer_create(testFile.name, (char *)testFile.data, testFile.size);
+        buffer_set_current(scratchBufferName);
+        
+        char fullPath[260];
+        build_absolute_path(fullPath, 260, "test.txt");
+        buffer_set_fileName(fullPath);
+        buffer_set_name("test.txt");
+        buffer_read();
     }
     
-    world->bufferChain = buffer;
-    world->currentBuffer = world->bufferChain;
-    
-    
-    int y = 0;
 }
 
 function void world_fini(World *world)

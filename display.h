@@ -6,8 +6,8 @@ function void
 gap_buffer_draw(GapBuffer *buffer, s32 point, 
                 Vector2 origin, Vector2 bucketSize)
 {
-    RenderGroup *layer1 = render_group_push_layer(1);
-    RenderGroup *layer2 = render_group_push_layer(2);
+    SpriteGroup *layer1 = sprite_group_push_layer(1);
+    SpriteGroup *layer2 = sprite_group_push_layer(2);
     
     s32 bufferSize = gap_buffer_current_size(buffer);
     
@@ -35,10 +35,13 @@ gap_buffer_draw(GapBuffer *buffer, s32 point,
         draw_rect(layer1, editor.white, bucketPos, bucketSize, bucketColor, 0);
 #endif
         
-        if (c != 10)   // new line
+        if (i < bufferSize)
         {
-            draw_char(layer1, c, bucketPos, 
-                      bucketSize.x, rgba(.2f,.2f,.2f,1), 0);
+            if (c != 10)   // new line
+            {
+                draw_char(layer1, editor.font, c, bucketPos, 
+                          bucketSize.x, rgba(.2f,.2f,.2f,1), 0);
+            }
         }
         
         // Draw the point position
@@ -62,14 +65,14 @@ gap_buffer_draw(GapBuffer *buffer, s32 point,
             bucketPos.y -= bucketSize.y;
             
             
-            draw_label_int(layer2, lineCount++, 
+            draw_label_int(layer2, editor.font, lineCount++, 
                            v2(0, bucketPos.y+2*bucketSize.y), 
                            10, rgba(1,0,0,1), 0, false);
         }
     }
     
     bucketPos.y -= bucketSize.y;
-    draw_label_int(layer2, lineCount++, 
+    draw_label_int(layer2, editor.font, lineCount++, 
                    v2(0, bucketPos.y+2*bucketSize.y), 
                    10, rgba(1,0,0,1), 0, false);
     
@@ -87,17 +90,17 @@ gap_buffer_draw_with_gap(GapBuffer *buffer, s32 point,
     // Current buffer size 
     s32 bufferSize = gap_buffer_current_size(buffer);
     
-    RenderGroup *layer1 = render_group_push_layer(1);
-    RenderGroup *layer2 = render_group_push_layer(2);
+    SpriteGroup *layer1 = sprite_group_push_layer(1);
+    SpriteGroup *layer2 = sprite_group_push_layer(2);
     
     // Draw each bucket
-    for (s32 i = 0; i <= buffer->arraySize; ++i)
+    for (s32 i = 0; i <= buffer->storageSize; ++i)
     {
         //  Draw the bucket of the gap buffer
-        if (i < buffer->arraySize)
+        if (i < buffer->storageSize)
         {
             Color bucketColor = rgba(.5f,.5f,.5f,1);
-            if (i >= buffer->gapLeft && i < buffer->gapRight)
+            if (i >= buffer->left && i < buffer->right)
             {
                 bucketColor = rgba(1.0f,.4f,.4f,1);
             }
@@ -107,23 +110,26 @@ gap_buffer_draw_with_gap(GapBuffer *buffer, s32 point,
             {
                 bucketColor = rgba(.4f,.4f,1.0f,1);
                 
-                draw_label_int(layer2, i, v2(bucketPos.x, bucketPos.y+32), 0.7f*bucketSize.x, rgba(0,1,0,1), 1, true);
+                draw_label_int(layer2, editor.font, 
+                               i, v2(bucketPos.x, bucketPos.y+32), 0.7f*bucketSize.x, rgba(0,1,0,1), 1, true);
             }
             
             draw_rect(layer1, editor.white, bucketPos, bucketSize, bucketColor, 0);
             
             // If there is contents in it, draw
-            char *c = buffer->array + i;
+            char *c = buffer->storage + i;
             if (c)   // new line
             {
-                draw_char(layer1, *c, bucketPos, bucketSize.x, rgba(0,0,0,1), 0);
+                draw_char(layer1, editor.font,
+                          *c, bucketPos, bucketSize.x, rgba(0,0,0,1), 0);
             }
         }
         
         // Draw the left and right positions of the gap 
-        if (i == buffer->gapLeft || i == (buffer->gapRight))
+        if (i == buffer->left || i == (buffer->right))
         {
-            draw_label_int(layer2, i, bucketPos, 0.7f*bucketSize.x, rgba(1,1,0,1), 1, true);
+            draw_label_int(layer2, editor.font,
+                           i, bucketPos, 0.7f*bucketSize.x, rgba(1,1,0,1), 1, true);
         }
         
         // Advance the width of the bucket for the position of next one start at the end of this one

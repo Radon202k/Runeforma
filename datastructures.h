@@ -2,11 +2,11 @@
 
 typedef struct
 {
-    s32 gapLeft;
-    s32 gapRight;
+    s32 left;
+    s32 right;
     
-    s32 arraySize;
-    char *array;
+    s32 storageSize;
+    char *storage;
 } GapBuffer;
 
 typedef struct Buffer
@@ -21,7 +21,7 @@ typedef struct Buffer
     
     // Mark *markList;
     
-    GapBuffer contents;
+    GapBuffer gapBuffer;
     
     char fileName[512];
     FILETIME fileTime;

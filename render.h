@@ -1,13 +1,13 @@
 #pragma once
 
 function void
-base_draw_char(RenderGroup *group,
+base_draw_char(SpriteGroup *group, Sprite font,
                char c, float x, float y, float size,
                float r, float g, float b, float a,
                float layer)
 {
-    float uvWidth = editor.font.uv.max.x - editor.font.uv.min.x;
-    float uvHeight = editor.font.uv.max.y - editor.font.uv.min.y;
+    float uvWidth = font.uv.max.x - font.uv.min.x;
+    float uvHeight = font.uv.max.y - font.uv.min.y;
     
     float charUVwidth = (uvWidth / 16);
     float charUVheight = (uvHeight / 16);
@@ -18,16 +18,17 @@ base_draw_char(RenderGroup *group,
     base_draw_rect(group,
                    x, y,
                    size, size,
-                   editor.font.uv.min.x + charX*charUVwidth, editor.font.uv.min.y + charY*charUVheight,
-                   editor.font.uv.min.x + (charX+1)*charUVwidth, editor.font.uv.min.y + (charY+1)*charUVheight,
+                   font.uv.min.x + charX*charUVwidth, font.uv.min.y + charY*charUVheight,
+                   font.uv.min.x + (charX+1)*charUVwidth, font.uv.min.y + (charY+1)*charUVheight,
                    r,g,b,a,
                    layer);
 }
 
 function void
-draw_char(RenderGroup *group, char c, Vector2 pos, float size, Color col, float layer)
+draw_char(SpriteGroup *group, Sprite font,
+          char c, Vector2 pos, float size, Color col, float layer)
 {
-    base_draw_char(group,
+    base_draw_char(group, font,
                    c, 
                    pos.x, pos.y,
                    size,
@@ -36,18 +37,20 @@ draw_char(RenderGroup *group, char c, Vector2 pos, float size, Color col, float 
 }
 
 function void
-draw_string(RenderGroup *group, char *string, Vector2 pos, float size, Color col, float layer)
+draw_string(SpriteGroup *group, Sprite font, 
+            char *string, Vector2 pos, float size, Color col, float layer)
 {
     char *at = string;
     while (*at)
     {
-        draw_char(group, *at++, pos, size, col, layer);
+        draw_char(group, font, *at++, pos, size, col, layer);
         pos.x += size;
     }
 }
 
 function void
-draw_label_int(RenderGroup *group, s32 value, Vector2 pos, float size, Color col, float layer,
+draw_label_int(SpriteGroup *group, Sprite font,
+               s32 value, Vector2 pos, float size, Color col, float layer,
                bool centered)
 {
     // Get a string for the number using _itoa_s
@@ -62,11 +65,13 @@ draw_label_int(RenderGroup *group, s32 value, Vector2 pos, float size, Color col
         charPos.x -= strlen(number) * 0.5f*size;
     }
     
-    draw_string(group, number, v2(charPos.x, charPos.y - 16.0f), size, col, layer);
+    draw_string(group, font,
+                number, v2(charPos.x, charPos.y - 16.0f), size, col, layer);
 }
 
 function void
-draw_label_v2i(RenderGroup *group, Vector2i value, Vector2 pos, float size, Color col, float layer,
+draw_label_v2i(SpriteGroup *group, Sprite font,
+               Vector2i value, Vector2 pos, float size, Color col, float layer,
                bool centered)
 {
     // Get a string for the number using _itoa_s
@@ -89,7 +94,7 @@ draw_label_v2i(RenderGroup *group, Vector2i value, Vector2 pos, float size, Colo
         charPos.x -= strlen(number)*0.5f*size;
     }
     
-    draw_string(group, number, 
+    draw_string(group, font, number, 
                 v2(charPos.x, charPos.y - 16.0f), size, col, layer);
     
 }
