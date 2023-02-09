@@ -456,6 +456,7 @@ typedef struct
     Vector2 pos;
     Key left;
     Key right;
+    float wheel;
 } Mouse;
 
 // Structure to hold all data the engine uses
@@ -861,6 +862,36 @@ draw_rect(SpriteGroup *group,
                    layer);
 }
 
+function void
+base_draw_outline_rect(float x, float y,
+                       float width, float height,
+                       float r, float g, float b, float a,
+                       float layer)
+{
+    // Draw bottom line
+    base_draw_line(x, y, 
+                   x + width, y,
+                   r, g, b, a,
+                   layer);
+    
+    // Draw top line
+    base_draw_line(x, y + height, 
+                   x + width, y + height,
+                   r, g, b, a,
+                   layer);
+    
+    // Draw left line
+    base_draw_line(x, y, 
+                   x, y + height + 1,
+                   r, g, b, a,
+                   layer);
+    // Draw right line
+    base_draw_line(x + width, y, 
+                   x + width, y + height,
+                   r, g, b, a,
+                   layer);
+}
+
 // Push a sprite command into the sprite group (same as above)
 function void
 draw_sprite(SpriteGroup *group,
@@ -886,18 +917,22 @@ LRESULT window_proc(HWND window, UINT message, WPARAM wParam, LPARAM lParam)
     LRESULT result = 0;
     switch (message) {
         
-        // [W1] . When Close/Destroy message, flag engine.running as false
         case WM_DESTROY:
         case WM_CLOSE:
         {
             engine.running = false;
         } break;
         
-        // [W2] . Handle keyboard messages
         case WM_CHAR:
         {
             engine.inputChar = (char)wParam;
             engine.inputCharEntered = true;
+        } break;
+        
+        case WM_MOUSEWHEEL:
+        {
+            engine.mouse.wheel = ((float)GET_WHEEL_DELTA_WPARAM(wParam) / 
+                                  (float)WHEEL_DELTA);
         } break;
         
         case WM_KEYDOWN:
@@ -2193,6 +2228,8 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev,
         
         engine.mouse.left.released = false;
         engine.mouse.right.released = false;
+        
+        engine.mouse.wheel = 0;
         
         // Clear the input char
         engine.inputChar = 0;

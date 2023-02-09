@@ -69,11 +69,16 @@ function void update()
                    1, 0, 1, 1,
                    100);
     
-    
     base_draw_line(0, 0, 
                    engine.mouse.pos.x, engine.mouse.pos.y,
                    1, 0, 1, 1,
                    100);
+    
+    
+    base_draw_outline_rect(engine.mouse.pos.x, engine.mouse.pos.y,
+                           20, 20,
+                           1, 0, 0, 1,
+                           1);
     
     
     // Define a size to draw each bucket
