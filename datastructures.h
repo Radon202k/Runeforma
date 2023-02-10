@@ -19,6 +19,8 @@ typedef struct Buffer
     s32 numChars;
     s32 numLines;
     
+    s32 mark;
+    
     // Mark *markList;
     
     GapBuffer gapBuffer;

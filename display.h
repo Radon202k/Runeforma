@@ -3,7 +3,7 @@
 #include "render.h"
 
 function void
-gap_buffer_draw(GapBuffer *buffer, s32 point, 
+gap_buffer_draw(GapBuffer *buffer, s32 point, s32 mark,
                 Vector2 origin, Vector2 bucketSize)
 {
     SpriteGroup *layer1 = sprite_group_push_layer(1);
@@ -56,6 +56,28 @@ gap_buffer_draw(GapBuffer *buffer, s32 point,
                       v2(2, bucketSize.y), rgba(1,0,0,1), 1);
             
         }
+        
+        // Draw the mark position
+        if (mark == i)
+        {
+#if 0
+            // Base
+            draw_rect(layer1, editor.white, v2(bucketPos.x, bucketPos.y-2), 
+                      v2(0.5f*bucketSize.x+2, 2), rgba(0,0,1,1), 1);
+            
+            // Right side
+            draw_rect(layer1, editor.white, v2(bucketPos.x, bucketPos.y), 
+                      v2(2, bucketSize.y), rgba(0,0,1,1), 1);
+#endif
+            
+            base_draw_outline_rect(bucketPos.x, bucketPos.y,
+                                   bucketSize.x, bucketSize.y,
+                                   1,0,0,1,
+                                   10);
+            
+            
+        }
+        
         
         bucketPos.x += bucketSize.x;
         if (((bucketPos.x + bucketSize.x) > engine.backBufferSize.x) ||

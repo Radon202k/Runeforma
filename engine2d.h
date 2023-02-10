@@ -435,7 +435,7 @@ typedef struct
 // Structure to hold the many keys we support (the keyboard)
 typedef union
 {
-    Key all[9];
+    Key all[13];
     struct
     {
         Key up;
@@ -446,7 +446,11 @@ typedef union
         Key alt;
         Key f1;
         Key s;
+        Key d;
+        Key c;
+        Key v;
         Key control;
+        Key space;
     };
 } Keys;
 
@@ -950,7 +954,11 @@ LRESULT window_proc(HWND window, UINT message, WPARAM wParam, LPARAM lParam)
             else if (wParam == VK_MENU)       key = &engine.key.alt;
             else if (wParam == VK_F1)         key = &engine.key.f1;
             else if (wParam == 'S')           key = &engine.key.s;
+            else if (wParam == 'D')           key = &engine.key.d;
+            else if (wParam == 'C')           key = &engine.key.c;
+            else if (wParam == 'V')           key = &engine.key.v;
             else if (wParam == VK_CONTROL)    key = &engine.key.control;
+            else if (wParam == VK_SPACE)      key = &engine.key.space;
             
             if (key)
             {

@@ -20,12 +20,13 @@ function void world_init(World *world)
     else
     {
         buffer_set_current(scratchBufferName);
-        
+#if 1
         char fullPath[260];
         build_absolute_path(fullPath, 260, "test.txt");
         buffer_set_fileName(fullPath);
         buffer_set_name("test.txt");
         buffer_read();
+#endif
     }
     
 }

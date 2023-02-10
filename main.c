@@ -37,9 +37,6 @@ function void init()
     assert(editor.white.exists);
     assert(editor.naruto.exists);
     
-    // Tests
-    test_gap_buffer_insert_char();
-    
     // Init
     world_init(&editor.world);
 }
@@ -64,21 +61,6 @@ function void update()
         draw_rect(layer2, sasuke, v2(300,0), v2(200,200), rgba(1,1,1,1), 0);
     }
     
-    base_draw_line(0, 0, 
-                   engine.backBufferSize.x, engine.backBufferSize.y,
-                   1, 0, 1, 1,
-                   100);
-    
-    base_draw_line(0, 0, 
-                   engine.mouse.pos.x, engine.mouse.pos.y,
-                   1, 0, 1, 1,
-                   100);
-    
-    
-    base_draw_outline_rect(engine.mouse.pos.x, engine.mouse.pos.y,
-                           20, 20,
-                           1, 0, 0, 1,
-                           1);
     
     
     // Define a size to draw each bucket
@@ -102,7 +84,8 @@ function void update()
     }
     else
     {
-        gap_buffer_draw(&buffer->gapBuffer, buffer->point, origin, bucketSize);
+        gap_buffer_draw(&buffer->gapBuffer, buffer->point, buffer->mark,
+                        origin, bucketSize);
     }
     
     // Search for occurences of the word "to"
