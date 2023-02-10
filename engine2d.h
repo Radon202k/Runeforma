@@ -412,6 +412,7 @@ typedef struct
     char name[512];
     Vector2 size;
     Rect2 uv;
+    Vector2 align;
 } Sprite;
 
 // Structure to help with sprite texture atlas construction
@@ -467,6 +468,7 @@ typedef struct
 typedef struct
 {
     bool running;
+    HDC deviceContext;
     HWND window;
     Vector2 backBufferSize;
     ID3D11Device *device;
@@ -710,23 +712,25 @@ blit_simple_unchecked(u8 *dest, u32 destSize, u8 *src,
 
 // Creates a sprite in the sprite atlas
 function Sprite
-base_sprite_create(u32 spriteWidth, u32 spriteHeight, u8 *bytes)
+sprite_create(u32 spriteWidth, u32 spriteHeight, u8 *bytes)
 {
     Sprite result = {0};
+    
+    s32 margin = 10;
     
     SpriteAtlas *atlas = &engine.spriteAtlas;
     
     // If the sprite doesn't fit in current row, need to advance to next row
-    if ((atlas->atX + spriteWidth) > atlas->size)
+    if ((atlas->atX + spriteWidth + margin) > atlas->size)
     {
         atlas->atX = 0;
         atlas->atY = atlas->bottom;
     }
     
     // If the sprite is taller than previous ones in row, grow the bottom
-    if (atlas->bottom < (atlas->atY + spriteHeight))
+    if (margin + atlas->bottom < (atlas->atY + spriteHeight))
     {
-        atlas->bottom = atlas->atY + spriteHeight;
+        atlas->bottom = atlas->atY + spriteHeight + margin;
     }
     
     assert(atlas->bottom <= atlas->size);
@@ -745,7 +749,7 @@ base_sprite_create(u32 spriteWidth, u32 spriteHeight, u8 *bytes)
     float maxV = ((float)atlas->atY + spriteHeight) / (float)atlas->size;
     
     // Advance atX
-    atlas->atX += spriteWidth;
+    atlas->atX += spriteWidth + margin;
     
     result.size = v2((float)spriteWidth, (float)spriteHeight);
     result.uv.min = v2(minU, minV);
@@ -758,7 +762,7 @@ base_sprite_create(u32 spriteWidth, u32 spriteHeight, u8 *bytes)
 
 // Create sprite from file
 function Sprite
-sprite_create(char *filePath)
+sprite_create_from_file(char *filePath)
 {
     Sprite result = {0};
     
@@ -769,7 +773,7 @@ sprite_create(char *filePath)
     
     if (bytes)
     {
-        result = base_sprite_create(spriteWidth, spriteHeight, bytes);
+        result = sprite_create(spriteWidth, spriteHeight, bytes);
     }
     
     return result;
@@ -801,6 +805,188 @@ atlas_update(u8 *updatedData)
                               0);
 }
 
+// Font
+typedef struct
+{
+    HFONT handle;
+    HBITMAP bitmap;
+    TEXTMETRIC metrics;
+    VOID *bytes;
+    
+} TruetypeFont;
+
+#define FONT_GLYPH_MAKER_MAX_WIDTH 1024
+#define FONT_GLYPH_MAKER_MAX_HEIGHT 1024
+
+function TruetypeFont
+font_create_from_file(char *fileName, char *fontName,
+                      int fontHeight)
+{
+    TruetypeFont result = {0};
+    
+    // Create the font
+    AddFontResourceExA(fileName, FR_PRIVATE, 0);
+    
+    result.handle = CreateFontA(fontHeight, 0, 0, 0, 
+                                FW_NORMAL, 
+                                false, // Italic
+                                false, // Underline
+                                false, // Strikeout
+                                DEFAULT_CHARSET,
+                                OUT_DEFAULT_PRECIS,
+                                CLIP_DEFAULT_PRECIS,
+                                PROOF_QUALITY,
+                                DEFAULT_PITCH|FF_DONTCARE,
+                                fontName);
+    
+    BITMAPINFO info = {0};
+    info.bmiHeader.biSize = sizeof(info.bmiHeader);
+    info.bmiHeader.biWidth = FONT_GLYPH_MAKER_MAX_WIDTH;
+    info.bmiHeader.biHeight = -FONT_GLYPH_MAKER_MAX_HEIGHT;
+    info.bmiHeader.biPlanes = 1;
+    info.bmiHeader.biBitCount = 32;
+    
+    // Create font bitmap
+    result.bitmap = CreateDIBSection(engine.deviceContext,
+                                     &info, DIB_RGB_COLORS, 
+                                     &result.bytes, 0, 0);
+    
+    // Clear to zero
+    memset(result.bytes, 0, FONT_GLYPH_MAKER_MAX_WIDTH*
+           FONT_GLYPH_MAKER_MAX_HEIGHT*4);
+    
+    
+    // Select font bitmap
+    SelectObject(engine.deviceContext, result.bitmap);
+    
+    // Select font
+    SelectObject(engine.deviceContext, result.handle);
+    
+    // Get font text metrics
+    GetTextMetrics(engine.deviceContext, &result.metrics);
+    
+    return result;
+}
+
+function Sprite
+font_create_glyph(TruetypeFont *font, char c)
+{
+    Sprite result = {0};
+    
+    // Cheese point
+    wchar_t cheesePoint = (wchar_t)c;
+    
+    // Get the char width
+    SIZE size;
+    GetTextExtentPoint32W(engine.deviceContext,
+                          &cheesePoint,
+                          1, &size);
+    
+    int width = size.cx;
+    int height = size.cy;
+    
+    // Set the background color to back
+    SetBkColor(engine.deviceContext, RGB(0,0,0));
+    
+    // Set the text color to white
+    SetTextColor(engine.deviceContext, RGB(255,255,255));
+    
+    // Write the char to the bitmap
+    TextOutW(engine.deviceContext, 0, 0, &cheesePoint, 1);
+    
+    // Find out the tight bounds
+    s32 minX = 10000;
+    s32 minY = 10000;
+    s32 maxX = -10000;
+    s32 maxY = -10000;
+    u32 *row = (u32 *)font->bytes;
+    for (s32 y = 0;
+         y < height;
+         ++y)
+    {
+        u32 *pixel = row;
+        for (s32 x = 0;
+             x < width;
+             ++x)
+        {
+            if (*pixel != 0)
+            {
+                if (minX > x) minX = x;
+                if (minY > y) minY = y;
+                if (maxX < x) maxX = x;
+                if (maxY < y) maxY = y;
+            }
+            
+            ++pixel;
+        }
+        row += FONT_GLYPH_MAKER_MAX_WIDTH;
+    }
+    
+    // Special case for space
+    if (minX == 10000 && minY == 10000 &&
+        maxX == -10000 && maxY == -10000)
+    {
+        minX = 0;
+        minY = 0;
+        maxX = size.cx;
+        maxY = size.cy;
+    }
+    
+    // Copy bytes from glyph maker bytes to our own memory
+    if (minX < maxX)
+    {
+        // Update width and height
+        width = (maxX-minX)+1;
+        height = (maxY-minY)+1;
+        
+        // Allocate memory for the bytes
+        u8 *bytes = (u8 *)malloc(width*height*4);
+        
+        // Clear to zero
+        memset(bytes, 0, width*height*4);
+        
+        // For every row
+        u8 *destRow = bytes;
+        u32 *srcRow = (u32 *)font->bytes + minY*FONT_GLYPH_MAKER_MAX_WIDTH + minX;
+        for (s32 y = minY;
+             y <= maxY;
+             ++y)
+        {
+            // For every col
+            u32 *pixel = (u32 *)srcRow;
+            u32 *dest = (u32 *)destRow;
+            for (s32 x = minX;
+                 x <= maxX;
+                 ++x)
+            {
+                // Extract the r component
+                u8 alpha = (u8)(*pixel++ & 0xff);
+                
+                // Write it to all components
+                *dest++ = ((alpha << 24) |
+                           (alpha << 16) |
+                           (alpha << 8) |
+                           (alpha << 0));
+            }
+            
+            // Advance the row
+            destRow += 4*width;
+            srcRow += FONT_GLYPH_MAKER_MAX_WIDTH;
+        }
+        
+        // Create the sprite
+        result = sprite_create(width, height, bytes);
+        
+        result.align.y = (float)(maxY - size.cy + font->metrics.tmDescent);
+        
+        // Free the allocated memory
+        free(bytes);
+    }
+    
+    return result;
+}
+
+
 // Get a new sprite layer to use
 function SpriteGroup *
 sprite_group_push_layer(u32 layer)
@@ -821,7 +1007,7 @@ base_draw_line(float aX, float aY,
         group->lineCommandsPushedCount;
     command->a = v2(aX,aY);
     command->b = v2(bX,bY);
-    float eps = 0.001f;
+    float eps = 0.000f;
     command->col = rgba(r, g, b, a);
     command->layer = layer;
     
@@ -842,7 +1028,7 @@ base_draw_rect(SpriteGroup *group,
         group->spriteCommandsPushedCount;
     command->pos = v2(x,y);
     command->size = v2(width,height);
-    float eps = 0.001f;
+    float eps = 0.000f;
     command->uv = rect2(minU + eps, maxV - eps, maxU - eps, minV + eps);
     command->col = rgba(r, g, b, a);
     command->layer = layer;
@@ -1721,6 +1907,9 @@ swap_chain_resize()
 int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, 
                      PSTR cmdline, int cmdshow)
 {
+    // Create device context
+    engine.deviceContext = CreateCompatibleDC(GetDC(0));
+    
     // We register a window class with the window characteristcs we desire
     WNDCLASSEXA windowClass = 
     {

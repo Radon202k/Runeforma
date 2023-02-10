@@ -13,6 +13,8 @@ gap_buffer_draw(GapBuffer *buffer, s32 point, s32 mark,
     
     Vector2 bucketPos = v2(origin.x, origin.y);
     
+    Vector2 glyphPos = v2(origin.x, origin.y);
+    
     s32 lineCount = 1;
     
     // Draw the string without the gap
@@ -31,72 +33,64 @@ gap_buffer_draw(GapBuffer *buffer, s32 point, s32 mark,
             // bucketColor = rgba(.2f,.2f,.2f,1);
         }
         
-#if 0
-        draw_rect(layer1, editor.white, bucketPos, bucketSize, bucketColor, 0);
-#endif
+        float glyphWidth = 0;
         
+        // Draw the actual glyph
         if (i < bufferSize)
         {
             if (c != 10)   // new line
             {
-                draw_char(layer1, editor.font, c, bucketPos, 
-                          bucketSize.x, rgba(.2f,.2f,.2f,1), 0);
+                glyphWidth = draw_glyph(layer1, editor.glyphs32, 
+                                        c, glyphPos, rgba(.4f,.4f,.4f,1), 0);
             }
         }
         
-        // Draw the point position
+        // Draw the point
         if (point == i)
         {
             // Base
-            draw_rect(layer1, editor.white, v2(bucketPos.x, bucketPos.y-2), 
+            draw_rect(layer1, editor.white, v2(glyphPos.x, glyphPos.y-2), 
                       v2(0.5f*bucketSize.x+2, 2), rgba(1,0,0,1), 1);
             
             // Right side
-            draw_rect(layer1, editor.white, v2(bucketPos.x, bucketPos.y), 
+            draw_rect(layer1, editor.white, v2(glyphPos.x, glyphPos.y), 
                       v2(2, bucketSize.y), rgba(1,0,0,1), 1);
             
         }
         
-        // Draw the mark position
+        // Draw the mark
         if (mark == i)
         {
-#if 0
             // Base
-            draw_rect(layer1, editor.white, v2(bucketPos.x, bucketPos.y-2), 
-                      v2(0.5f*bucketSize.x+2, 2), rgba(0,0,1,1), 1);
+            draw_rect(layer1, editor.white, v2(glyphPos.x, glyphPos.y-2), 
+                      v2(0.5f*glyphWidth+2, 2), rgba(0,0,1,1), 1);
             
             // Right side
-            draw_rect(layer1, editor.white, v2(bucketPos.x, bucketPos.y), 
+            draw_rect(layer1, editor.white, v2(glyphPos.x, glyphPos.y), 
                       v2(2, bucketSize.y), rgba(0,0,1,1), 1);
-#endif
-            
-            base_draw_outline_rect(bucketPos.x, bucketPos.y,
-                                   bucketSize.x, bucketSize.y,
-                                   1,0,0,1,
-                                   10);
-            
-            
         }
         
         
-        bucketPos.x += bucketSize.x;
-        if (((bucketPos.x + bucketSize.x) > engine.backBufferSize.x) ||
+        glyphPos.x += glyphWidth;
+        
+        // Draw the line number
+        if (((glyphPos.x + glyphWidth) > engine.backBufferSize.x) ||
             (c == 10))
         {
-            bucketPos.x = origin.x;
-            bucketPos.y -= bucketSize.y;
+            glyphPos.x = origin.x;
+            glyphPos.y -= bucketSize.y;
             
-            
-            draw_label_int(layer2, editor.font, lineCount++, 
-                           v2(0, bucketPos.y+2*bucketSize.y), 
-                           10, rgba(1,0,0,1), 0, false);
+            draw_label_int(layer2, editor.glyphs16, lineCount++, 
+                           v2(5, glyphPos.y+2*bucketSize.y), 
+                           10, rgba(.7f,.7f,.7f,1), 0, false);
         }
     }
     
-    bucketPos.y -= bucketSize.y;
-    draw_label_int(layer2, editor.font, lineCount++, 
-                   v2(0, bucketPos.y+2*bucketSize.y), 
-                   10, rgba(1,0,0,1), 0, false);
+    // Draw the last line number
+    glyphPos.y -= bucketSize.y;
+    draw_label_int(layer2, editor.glyphs16, lineCount++, 
+                   v2(5, glyphPos.y+2*bucketSize.y), 
+                   10, rgba(.7f,.7f,.7f,1), 0, false);
     
     // Set the point back
     buffer_point_set(point);
@@ -132,7 +126,7 @@ gap_buffer_draw_with_gap(GapBuffer *buffer, s32 point,
             {
                 bucketColor = rgba(.4f,.4f,1.0f,1);
                 
-                draw_label_int(layer2, editor.font, 
+                draw_label_int(layer2, editor.glyphs16, 
                                i, v2(bucketPos.x, bucketPos.y+32), 0.7f*bucketSize.x, rgba(0,1,0,1), 1, true);
             }
             
@@ -142,15 +136,14 @@ gap_buffer_draw_with_gap(GapBuffer *buffer, s32 point,
             char *c = buffer->storage + i;
             if (c)   // new line
             {
-                draw_char(layer1, editor.font,
-                          *c, bucketPos, bucketSize.x, rgba(0,0,0,1), 0);
+                draw_glyph(layer1, editor.glyphs16, *c, bucketPos, rgba(0,0,0,1), 0);
             }
         }
         
         // Draw the left and right positions of the gap 
         if (i == buffer->left || i == (buffer->right))
         {
-            draw_label_int(layer2, editor.font,
+            draw_label_int(layer2, editor.glyphs16,
                            i, bucketPos, 0.7f*bucketSize.x, rgba(1,1,0,1), 1, true);
         }
         

@@ -40,11 +40,16 @@ typedef struct
 
 typedef struct
 {
-    Sprite font;
     Sprite white;
-    Sprite naruto;
+    Sprite debugFont;
     bool showGap;
     
     World world;
+    
+    TruetypeFont font32;
+    TruetypeFont font16;
+    
+    Sprite glyphs32[94];
+    Sprite glyphs16[94];
     
 } Editor;

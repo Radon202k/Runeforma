@@ -24,9 +24,48 @@ base_draw_char(SpriteGroup *group, Sprite font,
                    layer);
 }
 
+function float
+draw_glyph(SpriteGroup *group, Sprite *glyphs,
+           char c, Vector2 pos, Color col, float layer)
+{
+    float width = 0;
+    
+    Sprite glyphSprite = glyphs[(s32)c - 32];
+    
+    pos.y -= glyphSprite.align.y;
+    
+    draw_sprite(group, glyphSprite, pos, v2(1,1), col, 1);
+    
+#if 0
+    base_draw_outline_rect(pos.x,pos.y, 
+                           glyphSprite.size.x, glyphSprite.size.y,
+                           col.r,col.g,col.b,col.a,
+                           0);
+#endif
+    
+    width = glyphSprite.size.x;
+    return width;
+}
+
 function void
-draw_char(SpriteGroup *group, Sprite font,
-          char c, Vector2 pos, float size, Color col, float layer)
+draw_string(SpriteGroup *group, Sprite *glyphs,
+            char *s, Vector2 pos, Color col, float layer)
+{
+    char *at = s;
+    while (*at)
+    {
+        float width = draw_glyph(group, glyphs, *at, pos, col, layer);
+        
+        pos.x += width;
+        
+        at++;
+    }
+}
+
+
+function void
+debug_draw_char(SpriteGroup *group, Sprite font,
+                char c, Vector2 pos, float size, Color col, float layer)
 {
     base_draw_char(group, font,
                    c, 
@@ -37,19 +76,19 @@ draw_char(SpriteGroup *group, Sprite font,
 }
 
 function void
-draw_string(SpriteGroup *group, Sprite font, 
-            char *string, Vector2 pos, float size, Color col, float layer)
+debug_draw_string(SpriteGroup *group, Sprite font, 
+                  char *string, Vector2 pos, float size, Color col, float layer)
 {
     char *at = string;
     while (*at)
     {
-        draw_char(group, font, *at++, pos, size, col, layer);
+        debug_draw_char(group, font, *at++, pos, size, col, layer);
         pos.x += size;
     }
 }
 
 function void
-draw_label_int(SpriteGroup *group, Sprite font,
+draw_label_int(SpriteGroup *group, Sprite *glyphs,
                s32 value, Vector2 pos, float size, Color col, float layer,
                bool centered)
 {
@@ -65,12 +104,12 @@ draw_label_int(SpriteGroup *group, Sprite font,
         charPos.x -= strlen(number) * 0.5f*size;
     }
     
-    draw_string(group, font,
-                number, v2(charPos.x, charPos.y - 16.0f), size, col, layer);
+    draw_string(group, glyphs,
+                number, v2(charPos.x, charPos.y - 16.0f), col, layer);
 }
 
 function void
-draw_label_v2i(SpriteGroup *group, Sprite font,
+draw_label_v2i(SpriteGroup *group, Sprite *glyphs,
                Vector2i value, Vector2 pos, float size, Color col, float layer,
                bool centered)
 {
@@ -94,7 +133,8 @@ draw_label_v2i(SpriteGroup *group, Sprite font,
         charPos.x -= strlen(number)*0.5f*size;
     }
     
-    draw_string(group, font, number, 
-                v2(charPos.x, charPos.y - 16.0f), size, col, layer);
+    draw_string(group, glyphs, 
+                number, 
+                v2(charPos.x, charPos.y - 16.0f), col, layer);
     
 }

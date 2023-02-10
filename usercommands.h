@@ -202,7 +202,7 @@ function void handle_user_navigation()
             char sasukePath[260];
             build_absolute_path(sasukePath, 260, "images/sasuke.png");
             
-            sasuke = sprite_create(sasukePath);
+            sasuke = sprite_create_from_file(sasukePath);
             assert(sasuke.exists);
             
             u8 *bytes = atlas_get_bytes();
