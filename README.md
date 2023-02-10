@@ -1,6 +1,10 @@
 # Runeforma
 
-## A text editor written in C
+## A graphical text editor for Windows written in C from scratch
+
+* No external libraries
+* Custom 2D Renderer written using Direct3D 11
+* All data structures and algorithms implemented manually 
 
 ### In progress ###
 

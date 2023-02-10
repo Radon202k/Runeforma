@@ -14,6 +14,8 @@ function void copy_text_to_clipboard(char *text)
         SetClipboardData(CF_TEXT, globalMemory);
         CloseClipboard();
     }
+    
+    GlobalFree(globalMemory);
 }
 
 // Helper function to paste text from the clipboard
@@ -31,8 +33,10 @@ function s32 paste_text_from_clipboard(char *text, int maxLength)
             strncpy_s(text, maxLength, data, pastedSize);
             GlobalUnlock(globalMemory);
         }
+        
         CloseClipboard();
     }
+    
     return pastedSize;
 }
 
