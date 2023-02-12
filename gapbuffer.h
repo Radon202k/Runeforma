@@ -5,57 +5,56 @@ gap_buffer_free(GapBuffer *buffer)
 {
     free(buffer->storage);
     buffer->storage = 0;
-    buffer->storageSize = 0;
+    buffer->storageLength = 0;
     buffer->left = 0;
     buffer->right = 0;
 }
 
 function void
 gap_buffer_init(GapBuffer *buffer, s32 *point,
-                char *data, s32 dataSize)
+                wchar_t *data, s32 dataLength)
 {
-    // Set the storage size  
-    buffer->storageSize = dataSize*2;
+    // Set the storage length  
+    buffer->storageLength = dataLength*2;
     
     // Allocate the storage array
-    buffer->storage = (char *)malloc(buffer->storageSize);
+    buffer->storage = alloc_array(buffer->storageLength, wchar_t);
     
     // Clear the memory to zero
-    memset(buffer->storage, 0, buffer->storageSize);
+    clear_array(buffer->storage, buffer->storageLength, wchar_t);
     
     // Copy the bytes
-    memcpy(buffer->storage, data, dataSize);
+    copy_array(buffer->storage, data, dataLength, wchar_t);
     
     // Set the gap left to be at the end of the buffer 
-    buffer->left = dataSize;
+    buffer->left = dataLength;
     
     // And the gap right to be at the end of the storage array
-    buffer->right = buffer->storageSize;
+    buffer->right = buffer->storageLength;
     
     // Set the point to be at the end of the buffer
-    *point = dataSize;
+    *point = dataLength;
 }
 
 function s32
-gap_buffer_current_gap_size(GapBuffer *buffer)
+gap_buffer_gap_length(GapBuffer *buffer)
 {
-    s32 gapSize = (buffer->right - buffer->left);
-    return gapSize;
+    return buffer->right-buffer->left;
 }
 
 function s32
-gap_buffer_current_size(GapBuffer *buffer)
+gap_buffer_current_length(GapBuffer *buffer)
 {
     assert(buffer->right >= buffer->left);
-    s32 gapSize = gap_buffer_current_gap_size(buffer);
-    s32 result = buffer->storageSize - gapSize;
+    s32 gapLength = gap_buffer_gap_length(buffer);
+    s32 result = buffer->storageLength-gapLength;
     return result;
 }
 
 function s32
 gap_buffer_user_to_gap_coords(GapBuffer *buffer, s32 userPoint)
 {
-    s32 bufferSize = gap_buffer_current_size(buffer);
+    s32 bufferSize = gap_buffer_current_length(buffer);
     assert(userPoint >= 0 && userPoint <= bufferSize);
     
     // If the point is before the start of the gap, the user coords
@@ -74,7 +73,7 @@ gap_buffer_user_to_gap_coords(GapBuffer *buffer, s32 userPoint)
 
 function s32
 gap_buffer_get_range(GapBuffer *buffer, 
-                     char *dest, s32 maxSize,
+                     wchar_t *dest, s32 maxLength,
                      s32 point, s32 mark)
 {
     s32 GS = buffer->left;
@@ -86,13 +85,13 @@ gap_buffer_get_range(GapBuffer *buffer,
     if (point <= GS && GS <= mark)
     {
         // Copy the first range between the point and the gap start
-        memcpy(dest, buffer->storage + point, min(maxSize, (GS-point)));
+        copy_array(dest, buffer->storage + point, min(maxLength, (GS-point)), wchar_t);
         
         // Account for the fact that the mark is after the gap
         mark = gap_buffer_user_to_gap_coords(buffer, mark);
         
         // Copy the second range between the gap end and the mark
-        memcpy(dest+GS-point, buffer->storage+GE, mark-GE);
+        copy_array(dest+GS-point, buffer->storage+GE, (mark-GE), wchar_t);
         
         return mark-GE;
     }
@@ -100,7 +99,7 @@ gap_buffer_get_range(GapBuffer *buffer,
     else if (mark < GS)
     {
         // Copy from point to mark (gap is after so it doesn't matter)
-        memcpy(dest, buffer->storage+point, mark-point);
+        copy_array(dest, buffer->storage+point, (mark-point), char);
         
         return mark-point;
     }
@@ -112,7 +111,7 @@ gap_buffer_get_range(GapBuffer *buffer,
         mark = gap_buffer_user_to_gap_coords(buffer, mark);
         
         // Copy from point to mark (gap is before so it doesn't matter)
-        memcpy(dest, buffer->storage+point, mark-point);
+        copy_array(dest, buffer->storage+point, (mark-point), char);
         
         return mark-point;
     }
@@ -124,8 +123,8 @@ gap_buffer_get_range(GapBuffer *buffer,
 function void
 gap_buffer_move_gap_to_point(GapBuffer *buffer, s32 point)
 {
-    s32 bufferSize = gap_buffer_current_size(buffer);
-    assert(point >= 0 && point <= bufferSize);
+    s32 bufferLength = gap_buffer_current_length(buffer);
+    assert(point >= 0 && point <= bufferLength);
     
     // If the gap is in the right position
     if (buffer->left == point)
@@ -186,19 +185,19 @@ gap_buffer_move_gap_to_point(GapBuffer *buffer, s32 point)
 }
 
 function void
-gap_buffer_resize(GapBuffer *buffer, u32 newArraySize)
+gap_buffer_resize(GapBuffer *buffer, u32 newArrayLength)
 {
-    s32 oldArraySize = buffer->storageSize;
+    s32 oldArrayLength = buffer->storageLength;
     
     // Alloc new array
-    char *newArray = (char *)malloc(newArraySize);
+    wchar_t *newArray = alloc_array(newArrayLength, wchar_t);
     
     // Clear it to zero for easy memory visualization while developing
     // TODO: Optimize
-    memset(newArray, 0, newArraySize);
+    clear_array(newArray, newArrayLength, wchar_t);
     
     // Copy the contents
-    memcpy(newArray, buffer->storage, oldArraySize);
+    copy_array(newArray, buffer->storage, oldArrayLength, wchar_t);
     
     // Free old array
     free(buffer->storage);
@@ -206,18 +205,18 @@ gap_buffer_resize(GapBuffer *buffer, u32 newArraySize)
     // Set the new pointer
     buffer->storage = newArray;
     
-    // Update the arraySize buffer variable
-    buffer->storageSize = newArraySize;
+    // Update the arrayLength buffer variable
+    buffer->storageLength = newArrayLength;
     
     // Set the gap to be from the end of last size until the end of new size
-    buffer->left = oldArraySize;
-    buffer->right = newArraySize;
+    buffer->left = oldArrayLength;
+    buffer->right = newArrayLength;
 }
 
 function void
-gap_buffer_insert_char(GapBuffer *buffer, char c, s32 point)
+gap_buffer_insert_char(GapBuffer *buffer, wchar_t c, s32 point)
 {
-    s32 bufferSize = gap_buffer_current_size(buffer);
+    s32 bufferSize = gap_buffer_current_length(buffer);
     assert(point >= 0 && point <= bufferSize);
     
     // Move gap
@@ -240,7 +239,7 @@ gap_buffer_insert_char(GapBuffer *buffer, char c, s32 point)
 function void
 gap_buffer_delete_char(GapBuffer *buffer, s32 point)
 {
-    s32 bufferSize = gap_buffer_current_size(buffer);
+    s32 bufferSize = gap_buffer_current_length(buffer);
     assert(point > 0 && point <= bufferSize);
     
     // Move gap
@@ -255,21 +254,27 @@ gap_buffer_delete_char(GapBuffer *buffer, s32 point)
 }
 
 function s32
-gap_buffer_insert_string(GapBuffer *buffer, char *s, s32 point)
+gap_buffer_insert_string(GapBuffer *buffer, wchar_t *s, s32 point)
 {
-    s32 len = (s32)strlen(s);
-    s32 gapSize = gap_buffer_current_gap_size(buffer);
-    s32 storageSize = buffer->storageSize;
-    if (len > gapSize)
+    s32 len = string_length(s);
+    
+    s32 gapLength = gap_buffer_gap_length(buffer);
+    
+    s32 storageLength = buffer->storageLength;
+    
+    if (len >= gapLength)
     {
-        s32 diff = gapSize - len;
-        s32 newSize = 2*storageSize + diff;
-        gap_buffer_resize(buffer, newSize);
+        s32 diff = len-gapLength;
+        s32 newLength = 2*storageLength + diff;
+        gap_buffer_resize(buffer, newLength);
     }
     
     gap_buffer_move_gap_to_point(buffer, point);
     buffer->left = buffer->left + len;
-    memcpy(buffer->storage + point, s, len);
+    // buffer->right = buffer->right + len;
+    
+    copy_array(buffer->storage + point, s, len, wchar_t);
+    
     return len;
 }
 
@@ -290,7 +295,8 @@ gap_buffer_delete_range(GapBuffer *buffer, s32 point, s32 mark)
     s32 GE = buffer->right;
     
     // clear from Gap End to Mark
-    memset(buffer->storage + GE, 0, mark - GE);
+    
+    clear_array(buffer->storage + GE, mark - GE, char);
     
     // set GE to mark
     buffer->right = mark;

@@ -1,10 +1,10 @@
 #pragma once
 
 function void
-base_draw_char(SpriteGroup *group, Sprite font,
-               char c, float x, float y, float size,
-               float r, float g, float b, float a,
-               float layer)
+base_debug_draw_char(SpriteGroup *group, Sprite font,
+                     wchar_t c, float x, float y, float size,
+                     float r, float g, float b, float a,
+                     float layer)
 {
     float uvWidth = font.uv.max.x - font.uv.min.x;
     float uvHeight = font.uv.max.y - font.uv.min.y;
@@ -24,62 +24,23 @@ base_draw_char(SpriteGroup *group, Sprite font,
                    layer);
 }
 
-function float
-draw_glyph(SpriteGroup *group, Sprite *glyphs,
-           char c, Vector2 pos, Color col, float layer)
-{
-    float width = 0;
-    
-    Sprite glyphSprite = glyphs[(s32)c - 32];
-    
-    pos.y -= glyphSprite.align.y;
-    
-    draw_sprite(group, glyphSprite, pos, v2(1,1), col, 1);
-    
-#if 0
-    base_draw_outline_rect(pos.x,pos.y, 
-                           glyphSprite.size.x, glyphSprite.size.y,
-                           col.r,col.g,col.b,col.a,
-                           0);
-#endif
-    
-    width = glyphSprite.size.x;
-    return width;
-}
-
-function void
-draw_string(SpriteGroup *group, Sprite *glyphs,
-            char *s, Vector2 pos, Color col, float layer)
-{
-    char *at = s;
-    while (*at)
-    {
-        float width = draw_glyph(group, glyphs, *at, pos, col, layer);
-        
-        pos.x += width;
-        
-        at++;
-    }
-}
-
-
 function void
 debug_draw_char(SpriteGroup *group, Sprite font,
-                char c, Vector2 pos, float size, Color col, float layer)
+                wchar_t c, Vector2 pos, float size, Color col, float layer)
 {
-    base_draw_char(group, font,
-                   c, 
-                   pos.x, pos.y,
-                   size,
-                   col.r, col.g, col.b, col.a,
-                   layer);
+    base_debug_draw_char(group, font,
+                         c, 
+                         pos.x, pos.y,
+                         size,
+                         col.r, col.g, col.b, col.a,
+                         layer);
 }
 
 function void
 debug_draw_string(SpriteGroup *group, Sprite font, 
-                  char *string, Vector2 pos, float size, Color col, float layer)
+                  wchar_t *string, Vector2 pos, float size, Color col, float layer)
 {
-    char *at = string;
+    wchar_t *at = string;
     while (*at)
     {
         debug_draw_char(group, font, *at++, pos, size, col, layer);
@@ -88,52 +49,52 @@ debug_draw_string(SpriteGroup *group, Sprite font,
 }
 
 function void
-draw_label_int(SpriteGroup *group, Sprite *glyphs,
+draw_label_int(SpriteGroup *group, TruetypeFont *font,
                s32 value, Vector2 pos, float size, Color col, float layer,
                bool centered)
 {
     // Get a string for the number using _itoa_s
-    char number[32] = {0};
-    _itoa_s(value, number, 32, 10);
+    wchar_t number[32] = {0};
+    _itow_s(value, number, 32, 10);
     
     // Claculate the char size and position
     Vector2 charPos = pos;
     
     if (centered)
     {
-        charPos.x -= strlen(number) * 0.5f*size;
+        charPos.x -= string_length(number) * 0.5f*size;
     }
     
-    draw_string(group, glyphs,
-                number, v2(charPos.x, charPos.y - 16.0f), col, layer);
+    draw_string(group, font, number, 
+                v2(charPos.x, charPos.y - 16.0f), col, layer);
 }
 
 function void
-draw_label_v2i(SpriteGroup *group, Sprite *glyphs,
+draw_label_v2i(SpriteGroup *group, TruetypeFont *font,
                Vector2i value, Vector2 pos, float size, Color col, float layer,
                bool centered)
 {
     // Get a string for the number using _itoa_s
-    char xs[15] = {0};
-    _itoa_s(value.x, xs, 16, 10);
+    wchar_t xs[15] = {0};
+    _itow_s(value.x, xs, 16, 10);
     
-    char ys[15] = {0};
-    _itoa_s(value.y, ys, 16, 10);
+    wchar_t ys[15] = {0};
+    _itow_s(value.y, ys, 16, 10);
     
-    char number[32] = {0};
-    strcat_s(number, 32, xs);
-    strcat_s(number, 32, ", ");
-    strcat_s(number, 32, ys);
+    wchar_t number[32] = {0};
+    string_append(number, 32, xs);
+    string_append(number, 32, L", ");
+    string_append(number, 32, ys);
     
     // Calculate the char size and position
     Vector2 charPos = pos;
     
     if (centered)
     {
-        charPos.x -= strlen(number)*0.5f*size;
+        charPos.x -= string_length(number)*0.5f*size;
     }
     
-    draw_string(group, glyphs, 
+    draw_string(group, font, 
                 number, 
                 v2(charPos.x, charPos.y - 16.0f), col, layer);
     

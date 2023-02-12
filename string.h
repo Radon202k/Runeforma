@@ -1,7 +1,7 @@
 #pragma once
 
 function s32
-string_search_naive_first_forward(char *text, s32 n, char *pattern, s32 m,
+string_search_naive_first_forward(wchar_t *text, s32 n, wchar_t *pattern, s32 m,
                                   s32 l, s32 r)
 {
     if ((r-l) <= n && m <= n)
@@ -32,7 +32,7 @@ string_search_naive_first_forward(char *text, s32 n, char *pattern, s32 m,
 }
 
 function s32
-string_search_naive_first_backward(char *text, s32 n, char *pattern, s32 m,
+string_search_naive_first_backward(wchar_t *text, s32 n, wchar_t *pattern, s32 m,
                                    s32 l, s32 r)
 {
     if ((r-l) <= n && m <= n)
@@ -67,8 +67,7 @@ function void
 string_search_naive(char *text, s32 n, char *pattern, s32 m,
                     s32 **foundPositions, s32 *foundCount)
 {
-    (*foundPositions) = (s32 *)malloc(16*sizeof(s32));
-    memset((*foundPositions), 0, 16*sizeof(s32));
+    (*foundPositions) = alloc_array(16, s32);
     
     *foundCount = 0;
     

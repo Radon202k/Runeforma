@@ -5,14 +5,14 @@ typedef struct
     s32 left;
     s32 right;
     
-    s32 storageSize;
-    char *storage;
+    s32 storageLength;
+    wchar_t *storage;
 } GapBuffer;
 
 typedef struct Buffer
 {
     struct Buffer *nextChainEntry;
-    char bufferName[512];
+    wchar_t bufferName[512];
     
     s32 point;
     s32 currentLine;
@@ -25,7 +25,7 @@ typedef struct Buffer
     
     GapBuffer gapBuffer;
     
-    char fileName[512];
+    wchar_t fileName[512];
     FILETIME fileTime;
     bool isModified;
     
@@ -49,7 +49,9 @@ typedef struct
     TruetypeFont font32;
     TruetypeFont font16;
     
-    Sprite glyphs32[94];
-    Sprite glyphs16[94];
+    float scrollBarPoint;
+    
+    float contentHCache;
+    bool contentHCached;
     
 } Editor;

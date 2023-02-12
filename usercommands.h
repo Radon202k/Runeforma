@@ -1,17 +1,25 @@
 #pragma once
 
 // Helper function to copy text to the clipboard
-function void copy_text_to_clipboard(char *text)
+function void 
+copy_text_to_clipboard(wchar_t *text)
 {
-    HGLOBAL globalMemory = GlobalAlloc(GMEM_MOVEABLE, (strlen(text) + 1) * sizeof(char));
-    char *data = (char *)GlobalLock(globalMemory);
-    strcpy_s(data, strnlen_s(text, INT_MAX)+1, text);
+    HGLOBAL globalMemory = GlobalAlloc(GMEM_MOVEABLE, (string_length(text)+1) * sizeof(wchar_t));
+    
+    wchar_t *data = (wchar_t *)GlobalLock(globalMemory);
+    
+    u32 copiedLength = string_length(text)+1;
+    
+    string_copy(data, copiedLength, text);
+    
+    assert(copiedLength < 1000);
+    
     GlobalUnlock(globalMemory);
     
     if (OpenClipboard(NULL))
     {
         EmptyClipboard();
-        SetClipboardData(CF_TEXT, globalMemory);
+        SetClipboardData(CF_UNICODETEXT, globalMemory);
         CloseClipboard();
     }
     
@@ -19,33 +27,43 @@ function void copy_text_to_clipboard(char *text)
 }
 
 // Helper function to paste text from the clipboard
-function s32 paste_text_from_clipboard(char *text, int maxLength)
+function s32 
+paste_text_from_clipboard(wchar_t *text, int maxLength)
 {
-    s32 pastedSize = 0;
+    s32 pastedLength = 0;
     
     if (OpenClipboard(NULL))
     {
-        HGLOBAL globalMemory = GetClipboardData(CF_TEXT);
+        HGLOBAL globalMemory = GetClipboardData(CF_UNICODETEXT);
         if (globalMemory != NULL)
         {
-            char *data = (char *)GlobalLock(globalMemory);
-            pastedSize = (s32)min(strnlen_s(data, INT_MAX)+1, maxLength-1);
-            strncpy_s(text, maxLength, data, pastedSize);
+            wchar_t *data = (wchar_t *)GlobalLock(globalMemory);
+            pastedLength = string_length(data);
+            
+            assert(pastedLength < 1000);
+            
+            string_copy_size(text, maxLength*sizeof(wchar_t), data, pastedLength);
             GlobalUnlock(globalMemory);
         }
         
         CloseClipboard();
     }
     
-    return pastedSize;
+    return pastedLength;
 }
 
-function void handle_user_navigation()
+function void
+handle_user_navigation()
 {
     Buffer *buffer = editor.world.currentBuffer;
-    s32 bufferSize = gap_buffer_current_size(&buffer->gapBuffer);
+    s32 bufferSize = gap_buffer_current_length(&buffer->gapBuffer);
     
-    // Handle keyboard input
+    // Scroll bar input
+    if (engine.mouse.wheel != 0)
+    {
+        editor.scrollBarPoint += 0.016f*engine.mouse.wheel;
+    }
+    
     
     // If contorl is down
     if (engine.key.control.down)
@@ -53,8 +71,8 @@ function void handle_user_navigation()
         // If the c key is pressed
         if (engine.key.c.pressed)
         {
-            s32 maxSize = sizeof(char)*1024*1024;
-            char *copiedText = (char *)malloc(maxSize);
+            s32 maxLength = 1024*1024;
+            wchar_t *copiedText = alloc_array(maxLength, wchar_t);
             
             bool swapedPointAndMark = false;
             // If the point is after the mark
@@ -68,7 +86,7 @@ function void handle_user_navigation()
             }
             
             s32 copiedSize = gap_buffer_get_range(&buffer->gapBuffer, 
-                                                  copiedText, maxSize,
+                                                  copiedText, maxLength,
                                                   buffer->point, buffer->mark);
             
             // If swapped point and mark
@@ -85,9 +103,9 @@ function void handle_user_navigation()
         // Else if the v key is pressed
         else if (engine.key.v.pressed)
         {
-            s32 maxSize = sizeof(char)*1024*1024;
-            char *pastedText = (char *)malloc(maxSize);
-            s32 pastedSize = paste_text_from_clipboard(pastedText, maxSize);
+            s32 maxLength = 1024*1024;
+            wchar_t *pastedText = alloc_array(maxLength, wchar_t);
+            s32 pastedLength = paste_text_from_clipboard(pastedText, maxLength);
             
             s32 len = gap_buffer_insert_string(&buffer->gapBuffer, 
                                                pastedText, 
@@ -139,10 +157,10 @@ function void handle_user_navigation()
         // If char was inputed
         if (engine.inputCharEntered)
         { 
-            char c = engine.inputChar;
+            wchar_t c = engine.inputChar;
             if (c != 8 &&  // backspace
                 (c == 10 || c == 13) || // newline / carriage return
-                (c >= 32 && c < 127))  
+                (c >= 32 && c < 256))  
             {
                 if (c == 13 || c == 10)
                 {
@@ -169,7 +187,7 @@ function void handle_user_navigation()
             else if(c == 9) // tab
             {
                 gap_buffer_insert_string(&buffer->gapBuffer, 
-                                         "  ", 
+                                         L"  ", 
                                          buffer->point);
                 buffer->point += 2;
             }
@@ -199,8 +217,8 @@ function void handle_user_navigation()
     {
         if (engine.key.up.pressed)
         {
-            char sasukePath[260];
-            build_absolute_path(sasukePath, 260, "images/sasuke.png");
+            wchar_t sasukePath[260];
+            build_absolute_path(sasukePath, 260, L"images/sasuke.png");
             
             sasuke = sprite_create_from_file(sasukePath);
             assert(sasuke.exists);
@@ -214,7 +232,7 @@ function void handle_user_navigation()
     
     if (engine.key.up.pressed)
     {
-        if (!buffer_search_backward("\n"))
+        if (!buffer_search_backward(L"\n"))
         {
             buffer_point_set(0);
         }
@@ -222,9 +240,9 @@ function void handle_user_navigation()
     
     if (engine.key.down.pressed)
     {
-        if (!buffer_search_forward("\n"))
+        if (!buffer_search_forward(L"\n"))
         {
-            buffer_point_set(gap_buffer_current_size(&buffer->gapBuffer));
+            buffer_point_set(gap_buffer_current_length(&buffer->gapBuffer));
         }
     }
     
@@ -234,7 +252,7 @@ function void handle_user_navigation()
         {
             if (engine.key.control.down)
             {
-                if (!buffer_search_backward(" "))
+                if (!buffer_search_backward(L" "))
                 {
                     buffer_point_set(0);
                 }
@@ -252,7 +270,7 @@ function void handle_user_navigation()
         {
             if (engine.key.control.down)
             {
-                if (!buffer_search_forward(" "))
+                if (!buffer_search_forward(L" "))
                 {
                     buffer_point_set(bufferSize-1);
                 }

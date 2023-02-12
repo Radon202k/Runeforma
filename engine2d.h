@@ -176,10 +176,78 @@ rect2(float minX, float minY, float maxX, float maxY)
     return result;
 }
 
+// Strings
+function void 
+string_copy(wchar_t *dest, u32 destSize,
+            wchar_t *src)
+{
+    wcscpy_s(dest, destSize, src);
+}
+
+function void 
+string_copy_size(wchar_t *dest, u32 destSize,
+                 wchar_t *src, u32 copySize)
+{
+    wcsncpy_s(dest, destSize, src, copySize);
+}
+
+function bool
+string_equal(wchar_t *a, wchar_t *b)
+{
+    return (wcscmp(a, b) == 0);
+}
+
+function s32
+string_length(wchar_t *s)
+{
+    return (u32)wcslen(s);
+}
+
+function void
+string_append(wchar_t *dest, u32 destSize, wchar_t *b)
+{
+    wcscat_s(dest, destSize, b);
+}
+
+
+#define alloc_size(size) _safe_alloc(size)
+#define alloc_type(type) (type *)_safe_alloc(sizeof(type))
+#define alloc_array(count, type) (type *)_safe_alloc((count)*sizeof(type))
+
+function void *_safe_alloc(u32 size)
+{
+    // Allocate it
+    void *result = malloc(size);
+    
+    // Clear it to zero
+    memset(result, 0, size);
+    
+    // Return the pointer
+    return result;
+}
+
+#define clear_size(ptr, size) _safe_clear(ptr, size)
+#define clear_type(ptr, type) _safe_clear(ptr, sizeof(type))
+#define clear_array(ptr, count, type) _safe_clear(ptr, (count)*sizeof(type))
+
+function void _safe_clear(void *ptr, u32 size)
+{
+    memset(ptr, 0, size);
+}
+
+#define copy_size(dst, src, size) _safe_copy(dst, src, size)
+#define copy_struct(dst, src, type) _safe_copy(dst, src, sizeof(type))
+#define copy_array(dst, src, count, type) _safe_copy(dst, src, (count)*sizeof(type))
+
+function void _safe_copy(void *dst, void *src, u32 size)
+{
+    memcpy(dst, src, size);
+}
+
 // File
 typedef struct 
 {
-    char name[512];
+    wchar_t name[512];
     bool exists;
     u32 size;
     u8 *bytes;
@@ -187,67 +255,41 @@ typedef struct
 
 // Read the full contents of a file at once
 function File
-read_file(char *filePath)
+read_file(wchar_t *filePath)
 {
     File result = {0};
     
-    // 
-    HANDLE handle = CreateFileA(filePath,
-                                GENERIC_READ,
-                                FILE_SHARE_READ,
-                                0,
-                                OPEN_EXISTING,
-                                0,
-                                0);
-    
-    LARGE_INTEGER fileSize;
-    if (!GetFileSizeEx(handle, &fileSize))
+    FILE *file = 0;
+    _wfopen_s(&file, filePath, L"rb, ccs=UTF-16LE");
+    if (file != 0)
     {
-        CloseHandle(handle);
-        return result;
+        fseek(file, 0, SEEK_END);
+        long fileSize = ftell(file);
+        rewind(file);
+        
+        result.bytes = alloc_size(fileSize+1);
+        if (result.bytes)
+        {
+            size_t readCount = fread((wchar_t *)result.bytes, sizeof(wchar_t),
+                                     fileSize/sizeof(wchar_t), file);
+            if (readCount == fileSize/sizeof(wchar_t))
+            {
+                result.exists = true;
+                result.size = fileSize;
+            }
+        }
     }
-    
-    // Add 1 to the byte size of the file to be able to end it will a null
-    result.size = (u32)fileSize.QuadPart+1;
-    
-    // Allocate the memory
-    result.bytes = (u8 *)malloc(result.size);
-    
-    // Clear it to zero
-    memset(result.bytes, 0, result.size);
-    
-    // Read the bytes to the memory
-    DWORD bytesRead = 0;
-    if (!ReadFile(handle, result.bytes, result.size-1,
-                  &bytesRead, 0))
-    {
-        result.size = 0;
-        
-        free(result.bytes);
-        result.bytes = 0;
-        
-        result.exists = false;
-        
-        CloseHandle(handle);
-        return result;
-    }
-    
-    assert(result.size-1 == bytesRead);
-    result.exists = true;
-    CloseHandle(handle);
-    
-    strcpy_s(result.name, 512, filePath);
     
     return result;
 }
 
 // Write the entire contents of a file at once
 function bool
-write_file(char *filePath, char *data, u32 size)
+write_file(wchar_t *filePath, wchar_t *data, u32 size)
 {
     bool result = false;
     
-    HANDLE handle = CreateFileA(filePath,
+    HANDLE handle = CreateFileW(filePath,
                                 GENERIC_WRITE,
                                 FILE_SHARE_WRITE,
                                 0,
@@ -506,7 +548,7 @@ typedef struct
     Keys key;
     Mouse mouse;
     bool inputCharEntered;
-    char inputChar;
+    wchar_t inputChar;
 } Engine;
 
 global Engine engine;
@@ -527,7 +569,7 @@ function void update();
 #endif
 
 #ifndef WINDOW_TITLE
-#define WINDOW_TITLE "Engine 2D"
+#define WINDOW_TITLE L"Engine 2D"
 #endif
 
 #ifndef TOP_DOWN
@@ -543,7 +585,7 @@ function void update();
 #endif
 
 #ifndef MAX_ALLOWED_RENDERED_SPRITES
-#define MAX_ALLOWED_RENDERED_SPRITES 10000
+#define MAX_ALLOWED_RENDERED_SPRITES 50000
 #endif
 
 #ifndef MAX_ALLOWED_RENDERED_LINES
@@ -555,16 +597,16 @@ function void update();
 ******************************************************************************/
 
 function void
-get_exe_path(char *path, DWORD size)
+get_exe_path(wchar_t *path, DWORD size)
 {
-    GetModuleFileName(NULL, path, size);
+    GetModuleFileNameW(NULL, path, size);
 }
 
 function void
-build_absolute_path(char *dest, u32 destSize, 
-                    char *fileName)
+build_absolute_path(wchar_t *dest, u32 destSize, 
+                    wchar_t *fileName)
 {
-    char exePath[MAX_PATH];
+    wchar_t exePath[MAX_PATH];
     get_exe_path(exePath, MAX_PATH);
     
     /** We want to copy the exe path until the last slash
@@ -572,8 +614,8 @@ build_absolute_path(char *dest, u32 destSize,
     ***                      ^                         */
     
     // Find the last slash
-    char *slashPos = 0;
-    char *at = exePath;
+    wchar_t *slashPos = 0;
+    wchar_t *at = exePath;
     while (*at)
     {
         if (*at == '\\' || *at == '/')
@@ -585,28 +627,34 @@ build_absolute_path(char *dest, u32 destSize,
     }
     
     // After going through all the chars, slashPos poitns to the last slash 
-    char *lastSlash = slashPos;
+    wchar_t *lastSlash = slashPos;
     
     // Extract the directory from the exe path
-    char dir[260];
+    wchar_t dir[260];
     
     // The address of lashSlash minus the address of exePath is equal to
     // the amount of chars we must copy. That is because arrays are placed
     // in memory one byte after the other.
-    strncpy_s(dir, 260, exePath, lastSlash - exePath);
+    string_copy_size(dir, 260, exePath, (u32)(lastSlash - exePath));
     
     // Combine the directory and file name to form the absolute path
-    _snprintf_s(dest, destSize, _TRUNCATE, "%s\\%s", dir, fileName);
+    _snwprintf_s(dest, destSize, _TRUNCATE, L"%s\\%s", dir, fileName);
 }
 
 function u8 *
-load_png(char *filePath, u32 *width, u32 *height)
+load_png(wchar_t *filePath, u32 *width, u32 *height)
 {
 	u8 *result = 0;
     
+    int asciiSize = WideCharToMultiByte(CP_ACP, 0, filePath, -1, NULL, 0, NULL, NULL);
+    char *asciiFilename = (char *)alloc_size(asciiSize);
+    WideCharToMultiByte(CP_ACP, 0, filePath, -1, asciiFilename, asciiSize, NULL, NULL);
+    
     // Load the image using stbi_load function from stb_image.h library
 	int w, h, nrChannels;
-	unsigned char *data = stbi_load(filePath, &w, &h, &nrChannels, 0);
+    
+    size_t byteSize = 0;
+    unsigned char *data = stbi_load(asciiFilename, &w, &h, &nrChannels, 0);
     
     // If the load function returned valid data
 	if (data)
@@ -762,7 +810,7 @@ sprite_create(u32 spriteWidth, u32 spriteHeight, u8 *bytes)
 
 // Create sprite from file
 function Sprite
-sprite_create_from_file(char *filePath)
+sprite_create_from_file(wchar_t *filePath)
 {
     Sprite result = {0};
     
@@ -805,7 +853,47 @@ atlas_update(u8 *updatedData)
                               0);
 }
 
+function float
+safe_divide(float a, float b)
+{
+    assert(b != 0);
+    float result = 0;
+    
+    if (b != 0)
+    {
+        result = a / b;
+    }
+    
+    return result;
+}
+
+function float
+map_range_to_range(float a1, float a2, float s,
+                   float b1, float b2)
+{
+    float t = (b1+(s-a1)*safe_divide((b2-b1),(a2-a1)));
+    return t;
+}
+
+
 // Font
+
+typedef struct GlyphNode
+{
+    struct GlyphNode *next;
+    
+    u32 unicode;
+    Sprite glyph;
+    
+} GlyphNode;
+
+typedef struct
+{
+    u32 storageSize;
+    GlyphNode *storage;
+    
+} GlyphHashTable;
+
 typedef struct
 {
     HFONT handle;
@@ -813,74 +901,57 @@ typedef struct
     TEXTMETRIC metrics;
     VOID *bytes;
     
+    GlyphHashTable glyphsHashTable;
+    
 } TruetypeFont;
 
 #define FONT_GLYPH_MAKER_MAX_WIDTH 1024
 #define FONT_GLYPH_MAKER_MAX_HEIGHT 1024
 
-function TruetypeFont
-font_create_from_file(char *fileName, char *fontName,
-                      int fontHeight)
+function GlyphHashTable
+glyph_hash_table_create(s32 storageSize)
 {
-    TruetypeFont result = {0};
+    GlyphHashTable result = {0};
     
-    // Create the font
-    AddFontResourceExA(fileName, FR_PRIVATE, 0);
-    
-    result.handle = CreateFontA(fontHeight, 0, 0, 0, 
-                                FW_NORMAL, 
-                                false, // Italic
-                                false, // Underline
-                                false, // Strikeout
-                                DEFAULT_CHARSET,
-                                OUT_DEFAULT_PRECIS,
-                                CLIP_DEFAULT_PRECIS,
-                                PROOF_QUALITY,
-                                DEFAULT_PITCH|FF_DONTCARE,
-                                fontName);
-    
-    BITMAPINFO info = {0};
-    info.bmiHeader.biSize = sizeof(info.bmiHeader);
-    info.bmiHeader.biWidth = FONT_GLYPH_MAKER_MAX_WIDTH;
-    info.bmiHeader.biHeight = -FONT_GLYPH_MAKER_MAX_HEIGHT;
-    info.bmiHeader.biPlanes = 1;
-    info.bmiHeader.biBitCount = 32;
-    
-    // Create font bitmap
-    result.bitmap = CreateDIBSection(engine.deviceContext,
-                                     &info, DIB_RGB_COLORS, 
-                                     &result.bytes, 0, 0);
-    
-    // Clear to zero
-    memset(result.bytes, 0, FONT_GLYPH_MAKER_MAX_WIDTH*
-           FONT_GLYPH_MAKER_MAX_HEIGHT*4);
-    
-    
-    // Select font bitmap
-    SelectObject(engine.deviceContext, result.bitmap);
-    
-    // Select font
-    SelectObject(engine.deviceContext, result.handle);
-    
-    // Get font text metrics
-    GetTextMetrics(engine.deviceContext, &result.metrics);
+    result.storageSize = storageSize;
+    result.storage = (GlyphNode *)malloc(storageSize*sizeof(GlyphNode));
+    memset((u8 *)result.storage, 0, storageSize*sizeof(GlyphNode));
     
     return result;
 }
 
+function u32
+get_hash_for_unicode(GlyphHashTable *table, u32 unicode)
+{
+    assert(table->storageSize % 2 == 0);
+    u32 hash = unicode & (table->storageSize-1);
+    return hash;
+}
+
 function Sprite
-font_create_glyph(TruetypeFont *font, char c)
+glyph_hash_table_get_sprite(GlyphHashTable *table, u32 unicode)
+{
+    u32 hash = get_hash_for_unicode(table, unicode);
+    // TODO: handle collisions
+    return table->storage[hash].glyph;
+}
+
+function void
+glyph_hash_table_set(GlyphHashTable *table, u32 unicode, GlyphNode glyphNode)
+{
+    u32 hash = get_hash_for_unicode(table, unicode);
+    // TODO: handle collisions
+    table->storage[hash] = glyphNode;
+}
+
+function Sprite
+font_create_glyph(TruetypeFont *font, wchar_t c)
 {
     Sprite result = {0};
     
-    // Cheese point
-    wchar_t cheesePoint = (wchar_t)c;
-    
     // Get the char width
     SIZE size;
-    GetTextExtentPoint32W(engine.deviceContext,
-                          &cheesePoint,
-                          1, &size);
+    GetTextExtentPoint32W(engine.deviceContext, &c, 1, &size);
     
     int width = size.cx;
     int height = size.cy;
@@ -892,7 +963,7 @@ font_create_glyph(TruetypeFont *font, char c)
     SetTextColor(engine.deviceContext, RGB(255,255,255));
     
     // Write the char to the bitmap
-    TextOutW(engine.deviceContext, 0, 0, &cheesePoint, 1);
+    TextOutW(engine.deviceContext, 0, 0, &c, 1);
     
     // Find out the tight bounds
     s32 minX = 10000;
@@ -959,14 +1030,16 @@ font_create_glyph(TruetypeFont *font, char c)
                  x <= maxX;
                  ++x)
             {
-                // Extract the r component
-                u8 alpha = (u8)(*pixel++ & 0xff);
+                u32 color = *pixel;
+                u32 a = ((color >> 16) & 0xff);
+                
+                pixel++;
                 
                 // Write it to all components
-                *dest++ = ((alpha << 24) |
-                           (alpha << 16) |
-                           (alpha << 8) |
-                           (alpha << 0));
+                *dest++ = ((a << 24) |
+                           (255 << 16) |
+                           (255 << 8) |
+                           (255 << 0));
             }
             
             // Advance the row
@@ -986,6 +1059,73 @@ font_create_glyph(TruetypeFont *font, char c)
     return result;
 }
 
+function TruetypeFont
+font_create_from_file(wchar_t *fileName, wchar_t *fontName,
+                      int fontHeight)
+{
+    TruetypeFont result = {0};
+    
+    // Create the font
+    AddFontResourceExW(fileName, FR_PRIVATE, 0);
+    
+    result.handle = CreateFontW(fontHeight, 0, 0, 0, 
+                                FW_NORMAL, 
+                                false, // Italic
+                                false, // Underline
+                                false, // Strikeout
+                                DEFAULT_CHARSET,
+                                OUT_DEFAULT_PRECIS,
+                                CLIP_DEFAULT_PRECIS,
+                                PROOF_QUALITY,
+                                DEFAULT_PITCH|FF_DONTCARE,
+                                fontName);
+    
+    BITMAPINFO info = {0};
+    info.bmiHeader.biSize = sizeof(info.bmiHeader);
+    info.bmiHeader.biWidth = FONT_GLYPH_MAKER_MAX_WIDTH;
+    info.bmiHeader.biHeight = -FONT_GLYPH_MAKER_MAX_HEIGHT;
+    info.bmiHeader.biPlanes = 1;
+    info.bmiHeader.biBitCount = 32;
+    
+    // Create font bitmap
+    result.bitmap = CreateDIBSection(engine.deviceContext,
+                                     &info, DIB_RGB_COLORS, 
+                                     &result.bytes, 0, 0);
+    
+    // Clear to zero
+    memset(result.bytes, 0, FONT_GLYPH_MAKER_MAX_WIDTH*
+           FONT_GLYPH_MAKER_MAX_HEIGHT*4);
+    
+    
+    // Select font bitmap
+    SelectObject(engine.deviceContext, result.bitmap);
+    
+    // Select font
+    SelectObject(engine.deviceContext, result.handle);
+    
+    // Get font text metrics
+    GetTextMetrics(engine.deviceContext, &result.metrics);
+    
+    // Create the glyphs hash table
+    result.glyphsHashTable = glyph_hash_table_create(512);
+    
+    // Create the basic Latin glyphs
+    for (s32 i = 32; i <= 255; i++)
+    {
+        if (i == 253)
+        {
+            int y = 3;
+        }
+        
+        
+        GlyphNode node = {0};
+        node.glyph = font_create_glyph(&result, (wchar_t)i);
+        node.unicode = i;
+        glyph_hash_table_set(&result.glyphsHashTable, i, node);
+    }
+    
+    return result;
+}
 
 // Get a new sprite layer to use
 function SpriteGroup *
@@ -1098,6 +1238,39 @@ draw_sprite(SpriteGroup *group,
                    layer);
 }
 
+function float
+draw_glyph(SpriteGroup *group, TruetypeFont *font,
+           u32 unicode, Vector2 pos, Color col, float layer)
+{
+    float width = 0;
+    
+    Sprite glyphSprite = glyph_hash_table_get_sprite(&font->glyphsHashTable, unicode);
+    
+    pos.y -= glyphSprite.align.y;
+    
+    draw_sprite(group, glyphSprite, pos, v2(1,1), col, layer);
+    
+    width = glyphSprite.size.x;
+    return width;
+}
+
+function void
+draw_string(SpriteGroup *group, TruetypeFont *font,
+            wchar_t *s, Vector2 pos, Color col, float layer)
+{
+    wchar_t *at = s;
+    while (*at)
+    {
+        float width = draw_glyph(group, font, *at, pos, col, layer);
+        
+        pos.x += width;
+        
+        at++;
+    }
+}
+
+
+
 /******************************************************************************
 *** [WINDOWPROC]
 ******************************************************************************/
@@ -1115,7 +1288,7 @@ LRESULT window_proc(HWND window, UINT message, WPARAM wParam, LPARAM lParam)
         
         case WM_CHAR:
         {
-            engine.inputChar = (char)wParam;
+            engine.inputChar = (wchar_t)wParam;
             engine.inputCharEntered = true;
         } break;
         
@@ -1180,7 +1353,7 @@ LRESULT window_proc(HWND window, UINT message, WPARAM wParam, LPARAM lParam)
         // [W3] . Call DefWindowProcA for every message we don't handle
         default:
         {
-            result = DefWindowProcA(window, message, wParam, lParam);
+            result = DefWindowProcW(window, message, wParam, lParam);
         } break;
     }
     return result;
@@ -1231,9 +1404,9 @@ create_sprites_shaders()
     {
         if (errorVertexMessages)
         {
-            char *msg = (char *)
+            wchar_t *msg = (wchar_t *)
             (ID3D10Blob_GetBufferPointer(errorVertexMessages));
-			OutputDebugStringA(msg);
+			OutputDebugStringW(msg);
             exit(1);
         }
 		else
@@ -1275,9 +1448,9 @@ create_sprites_shaders()
     {
         if (errorPixelMessages)
         {
-            char *msg = (char *)
+            wchar_t *msg = (wchar_t *)
             (ID3D10Blob_GetBufferPointer(errorPixelMessages));
-			OutputDebugStringA(msg);
+			OutputDebugStringW(msg);
             exit(1);
         }
 		else
@@ -1365,9 +1538,9 @@ create_lines_shaders()
     {
         if (errorVertexMessages)
         {
-            char *msg = (char *)
+            wchar_t *msg = (wchar_t *)
             (ID3D10Blob_GetBufferPointer(errorVertexMessages));
-			OutputDebugStringA(msg);
+			OutputDebugStringW(msg);
             exit(1);
         }
 		else
@@ -1405,9 +1578,9 @@ create_lines_shaders()
     {
         if (errorPixelMessages)
         {
-            char *msg = (char *)
+            wchar_t *msg = (wchar_t *)
             (ID3D10Blob_GetBufferPointer(errorPixelMessages));
-			OutputDebugStringA(msg);
+			OutputDebugStringW(msg);
             exit(1);
         }
 		else
@@ -1813,6 +1986,7 @@ render_pass(D3D11_PRIMITIVE_TOPOLOGY topology,
     
     // Draw
     ID3D11DeviceContext_Draw(engine.context, verticesCount, 0);
+    
 }
 
 function void
@@ -1911,7 +2085,7 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev,
     engine.deviceContext = CreateCompatibleDC(GetDC(0));
     
     // We register a window class with the window characteristcs we desire
-    WNDCLASSEXA windowClass = 
+    WNDCLASSEXW windowClass = 
     {
         sizeof(windowClass), 
         CS_HREDRAW | CS_VREDRAW, 
@@ -1919,11 +2093,11 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev,
         0, 0, 
         hInst, 
         NULL, NULL, NULL, NULL, 
-        "engine2d_window_class", 
+        L"engine2d_window_class", 
         NULL,
     };
     
-    if (RegisterClassExA(&windowClass) == 0) exit(1);
+    if (RegisterClassExW(&windowClass) == 0) exit(1);
     
     // To create the window the size, we need to expand the width and height
     // to account for the border of the window, hence AdjustWindowRect
@@ -1939,8 +2113,8 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev,
     engine.backBufferSize.y = BACKBUFFER_HEIGHT;
     
     // We create the window where we will show the buffer we render to
-    engine.window = CreateWindowExA(0, 
-                                    "engine2d_window_class", 
+    engine.window = CreateWindowExW(0, 
+                                    L"engine2d_window_class", 
                                     WINDOW_TITLE,
                                     WS_OVERLAPPEDWINDOW | WS_VISIBLE, 
                                     0, 0, windowWidth, windowHeight, 
@@ -2193,12 +2367,11 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev,
     D3D11_RENDER_TARGET_BLEND_DESC renderTargetBlendDesc = 
     {
         .BlendEnable = true,
-        .SrcBlend = D3D11_BLEND_ONE,
+        .SrcBlend = D3D11_BLEND_SRC_ALPHA,
         .DestBlend = D3D11_BLEND_INV_SRC_ALPHA,
         .BlendOp = D3D11_BLEND_OP_ADD,
-        // Use premultiplied alpha
         .SrcBlendAlpha = D3D11_BLEND_ONE,
-        .DestBlendAlpha = D3D11_BLEND_INV_SRC_ALPHA,
+        .DestBlendAlpha = D3D11_BLEND_ZERO,
         .BlendOpAlpha = D3D11_BLEND_OP_ADD,
         .RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL,
     };
@@ -2321,10 +2494,10 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev,
     while (engine.running)
     {
         MSG message;
-        while (PeekMessageA(&message, NULL, 0, 0, PM_REMOVE))
+        while (PeekMessageW(&message, NULL, 0, 0, PM_REMOVE))
         {
             TranslateMessage(&message);
-            DispatchMessageA(&message);
+            DispatchMessageW(&message);
         }
         
         // Get mouse position

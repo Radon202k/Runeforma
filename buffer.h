@@ -2,7 +2,7 @@
 
 // Get a buffer pointer from a buffer name
 function Buffer *
-buffer_get(char *bufferName)
+buffer_get(wchar_t *bufferName)
 {
     Buffer *result = 0;
     
@@ -11,7 +11,7 @@ buffer_get(char *bufferName)
     while (buffer)
     {
         // If the names are equal
-        if (strcmp(bufferName, buffer->bufferName) == 0)
+        if (string_equal(bufferName, buffer->bufferName))
         {
             // Found the buffer
             result = buffer;
@@ -28,7 +28,7 @@ buffer_get(char *bufferName)
 // Takes a name and creates an empty buffer with that name. Note that
 // no two buffers may have the same name.
 function bool
-buffer_create(char *bufferName)
+buffer_create(wchar_t *bufferName)
 {
     // Look for other buffer with the same name
     Buffer *other = buffer_get(bufferName);
@@ -43,21 +43,18 @@ buffer_create(char *bufferName)
     else
     {
         // Allocate a new buffer
-        Buffer *buffer = (Buffer *)malloc(sizeof(Buffer));
-        
-        // Clear it to zero
-        memset(buffer, 0, sizeof(Buffer));
+        Buffer *buffer = alloc_type(Buffer);
         
         // Scratch data
-        char *data = "Runeforma text editor written in C.";
-        u32 dataSize = (u32)strlen(data);
+        wchar_t *data = L"Runeforma text editor written in C.";
+        u32 dataLength = string_length(data);
         
         // Create a scratch gap buffer for it
         gap_buffer_init(&buffer->gapBuffer, &buffer->point,
-                        data, dataSize);
+                        data, dataLength);
         
         // Set its name 
-        strcpy_s(buffer->bufferName, 512, bufferName);
+        string_copy(buffer->bufferName, 512, bufferName);
         
         // Push to the head of the list
         buffer->nextChainEntry = editor.world.bufferChain;
@@ -69,7 +66,7 @@ buffer_create(char *bufferName)
 
 // Removes all characters and marks from the specified buffer
 function bool
-buffer_clear(char *bufferName)
+buffer_clear(wchar_t *bufferName)
 {
     // Look to see if there is a buffer with that name
     Buffer *buffer = buffer_get(bufferName);
@@ -89,7 +86,7 @@ buffer_clear(char *bufferName)
 // buffer in the chain becomes the current one. If no buffers are
 // left, the initial "scratch" buffer is re-created.
 function bool 
-buffer_delete(char *bufferName)
+buffer_delete(wchar_t *bufferName)
 {
     // Look to see if there is a buffer with that name
     Buffer *buffer = buffer_get(bufferName);
@@ -130,10 +127,10 @@ buffer_delete(char *bufferName)
                 else
                 {
                     // Re-create the scratch buffer
-                    buffer_create("Stratch");
+                    buffer_create(L"Stratch");
                     
                     // Set it as current
-                    editor.world.currentBuffer = buffer_get("Scratch");
+                    editor.world.currentBuffer = buffer_get(L"Scratch");
                 }
             }
         }
@@ -152,7 +149,7 @@ buffer_delete(char *bufferName)
 
 // Sets the current buffer to the one specified
 function bool
-buffer_set_current(char *bufferName)
+buffer_set_current(wchar_t *bufferName)
 {
     // Look to see if there is a buffer with that name
     Buffer *buffer = buffer_get(bufferName);
@@ -175,7 +172,7 @@ buffer_set_current(char *bufferName)
 // Sets the current buffer to the next one in the chain, and it returns
 // the name of the "new" buffer. This mechanism allows for iterating
 // through all buffers looking for one which meets an arbitrary test.
-function char *
+function wchar_t *
 buffer_set_next(void)
 {
     editor.world.currentBuffer = editor.world.currentBuffer->nextChainEntry;
@@ -184,24 +181,32 @@ buffer_set_next(void)
 
 // Changes the name of the current buffer
 function bool 
-buffer_set_name(char *bufferName)
+buffer_set_name(wchar_t *bufferName)
 {
     Buffer *buffer = editor.world.currentBuffer;
-    // Clear it to zero for clarity in memory
-    memset(buffer->bufferName, 0, array_count(buffer->bufferName));
+    // Clear current name to zero for clarity in memory
+    clear_array(buffer->bufferName, array_count(buffer->bufferName), wchar_t);
     // Get length of new name
-    u32 length = (u32)strlen(bufferName);
+    u32 length = string_length(bufferName);
     // Copy new name into the bufferName
-    memcpy(buffer->bufferName, bufferName, length);
+    copy_array(buffer->bufferName, bufferName, length, wchar_t);
     return true;
 }
 
 // Returns the name of the current buffer
-function char *
+function wchar_t *
 buffer_get_name()
 {
     Buffer *buffer = editor.world.currentBuffer;
     return buffer->bufferName;
+}
+
+function bool
+isUtf16(u8 *bytes, u32 size)
+{
+    if (bytes[0] == 255 && bytes[1] == 254) return true;
+    else if (bytes[0] == 254 && bytes[1] == 255) return true;
+    else return false;
 }
 
 // Clears the buffer and reads the currently named file into the buffer
@@ -212,111 +217,56 @@ buffer_read(void)
 {
     Buffer *buffer = editor.world.currentBuffer;
     
+    wchar_t *text = 0;
+    s32 textLength = 0;
+    
     File file = read_file(buffer->fileName);
     if (file.exists)
     {
         assert(file.size < 40000);
         
-        buffer->currentLine = 1;
+        bool fileUsesUtf16 = isUtf16(file.bytes, file.size);
         
-        // Mark *markList;
-        
-        u32 charCount = 0;
-        u32 lineCount = 0;
-        s32 finalLength = 0;
-        
-        // Build a temp array to convert the data
-        char *tempData = (char *)malloc(file.size);
-        
-        char *atSrc = (char *)file.bytes;
-        char *atDst = tempData;
-        
-        // For every byte
-        for (u32 byte = 0; byte < file.size; byte++)
+        // If the file uses UTF-16
+        if (fileUsesUtf16)
         {
-            // If it is a carriage return and the next is a new line
-            if (*atSrc == '\r' && *(atSrc + 1) == '\n')
-            {
-                // Copy a new line only (effectively removing the carriage return)
-                *atDst = '\n';
-                
-                // Advance the dest pointer
-                atDst++;
-                
-                // Increment the length to account for the new line char
-                finalLength++;
-                
-                // Count as a line
-                lineCount++;
-            }
-            // Else if it is a carriage return but the next is not a new line
-            else if (*atSrc == '\r' && *(atSrc + 1) != '\n')
-            {
-                // Ignore the character altogether, effectively "removing"
-                // the useless carriage return that is alone by some reason
-            }
-            // Else if it is a null character
-            else if (*atSrc == 0)
-            {
-                // Note that this for loop is using the file.size to stop
-                // So if we found a null character while the for is still
-                // running, it means that this null character is in the
-                // middle of the file, so we will just ignore it.
-            }
-            // Else, it must be a valid character
-            else
-            {
-                // Copy the character
-                *atDst = *atSrc;
-                
-                // Advance the dest pointer
-                atDst++;
-                
-                // Increment the final length to account for the new char
-                finalLength++;
-                
-                // If it is a new line
-                if (*atSrc == '\n')
-                {
-                    // Count the line
-                    lineCount++;
-                }
-                // Otherwise
-                else
-                {
-                    // Count as character
-                    charCount++;
-                    
-                    // TODO: We might want a flag to allow counting new line chars as
-                    // characteres as well.
-                }
-            }
+            // The length of the text is equal to the file size divided by 2
+            // Minus 1 to remove the null character at the end
+            textLength = (file.size/sizeof(wchar_t))-1;
             
-            // Advance the source pointer
-            atSrc++;
+            // Allocate the array
+            text = alloc_array(textLength, wchar_t);
+            
+            // Copy the text into it (skip BOM at first wchar_t (2 bytes))
+            copy_array(text, file.bytes+2, textLength, wchar_t);
+        }
+        // Else, assumes the file uses UTF-8 or ASCII
+        else
+        {
+            // Get the text length
+            textLength = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, (LPCCH)file.bytes, -1, NULL, 0);
+            
+            // Alloc the array
+            text = alloc_array(textLength, wchar_t);
+            
+            // Convert the text to UTF-16 and copy into text
+            MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, (LPCCH)file.bytes, -1, text, textLength);
         }
         
-        // End the data with a null
-        tempData[finalLength] = 0;
-        
         // Register number of chars
-        buffer->numChars = charCount;
-        buffer->numLines = lineCount+1;
-        
-        // Free the gap buffer
-        gap_buffer_free(&buffer->gapBuffer);
-        
-        // Init the internal gap buffer
-        gap_buffer_init(&buffer->gapBuffer, &buffer->point,
-                        tempData, finalLength);
-        
-        // Free the temp array
-        free(tempData);
-        
-        return true;
+        buffer->numChars = 0;
+        buffer->numLines = 0;
+        buffer->currentLine = 1;
     }
     
-    return false;
+    // Free the gap buffer
+    gap_buffer_free(&buffer->gapBuffer);
+    
+    // Init the internal gap buffer
+    gap_buffer_init(&buffer->gapBuffer, &buffer->point,
+                    text, textLength);
+    
+    return true;
 }
 
 // Writes the buffer to the currently named file, making any required
@@ -328,25 +278,17 @@ buffer_write(void)
 {
     Buffer *buffer = editor.world.currentBuffer;
     
-    u32 dataSize = gap_buffer_current_size(&buffer->gapBuffer);
+    u32 dataLength = gap_buffer_current_length(&buffer->gapBuffer);
+    wchar_t *data = alloc_array(dataLength+1, wchar_t);
     
-    char *data = (char *)malloc(dataSize+1);
-    
-    // Copy the first part, from beginning of array to gap start 
-    memcpy(data, buffer->gapBuffer.storage, buffer->gapBuffer.left);
-    
-    if (buffer->gapBuffer.storageSize - buffer->gapBuffer.right > 0)
-    {
-        // Copy second part, from gap end to end of array
-        memcpy(data + buffer->gapBuffer.left, 
-               buffer->gapBuffer.storage + buffer->gapBuffer.left, 
-               buffer->gapBuffer.storageSize - buffer->gapBuffer.right);
-    }
+    gap_buffer_get_range(&buffer->gapBuffer, 
+                         data, dataLength+1,
+                         0, dataLength);
     
     // Set last character as null
-    data[dataSize] = 0;
+    data[dataLength] = 0;
     
-    return write_file(buffer->fileName, data, dataSize+1);
+    return write_file(buffer->fileName, data, dataLength+1);
 }
 
 // Sets the point to the specified location
@@ -356,7 +298,7 @@ buffer_point_set(s32 loc)
     Buffer *buffer = editor.world.currentBuffer;
     
     // If the location is a valid position [0,bufferSize]
-    if (loc >= 0 && loc <= gap_buffer_current_size(&buffer->gapBuffer))
+    if (loc >= 0 && loc <= gap_buffer_current_length(&buffer->gapBuffer))
     {
         // Set the point and return true
         buffer->point = loc;
@@ -375,7 +317,7 @@ buffer_point_move(s32 count)
     s32 currentLocation = buffer->point;
     
     s32 newLocation = currentLocation + count;
-    s32 currentGapBufferSize = gap_buffer_current_size(&buffer->gapBuffer);
+    s32 currentGapBufferSize = gap_buffer_current_length(&buffer->gapBuffer);
     
     // If new location is negative
     if (newLocation < 0)
@@ -437,22 +379,24 @@ function s32 buffer_count_to_location()
 
 // TODO: Marks
 
-function char buffer_get_char_at(s32 loc)
+function wchar_t 
+buffer_get_char_at(s32 loc)
 {
     Buffer *buffer = editor.world.currentBuffer;
     s32 gapI = gap_buffer_user_to_gap_coords(&buffer->gapBuffer, loc);
-    char result = buffer->gapBuffer.storage[gapI];
+    wchar_t result = buffer->gapBuffer.storage[gapI];
     return result;
 }
 
-function char buffer_get_char()
+function wchar_t
+buffer_get_char()
 {
     Buffer *buffer = editor.world.currentBuffer;
     return buffer_get_char_at(buffer->point);
 }
 
 // Returns the name of the current buffer
-function char *
+function wchar_t *
 buffer_get_fileName(void)
 {
     Buffer *buffer = editor.world.currentBuffer;
@@ -460,23 +404,28 @@ buffer_get_fileName(void)
 }
 
 function void
-buffer_set_fileName(char *fileName)
+buffer_set_fileName(wchar_t *fileName)
 {
-    u32 length = (u32)strlen(fileName);
     Buffer *buffer = editor.world.currentBuffer;
-    memset(buffer->fileName, 0, array_count(buffer->fileName));
-    memcpy(buffer->fileName, fileName, length);
+    
+    // Clear current filename to zero
+    clear_array(buffer->fileName, array_count(buffer->fileName), wchar_t);
+    
+    // Copy new filename
+    u32 length = string_length(fileName);
+    copy_array(buffer->fileName, fileName, length, wchar_t);
 }
 
-function bool buffer_search_forward(char *string)
+function bool 
+buffer_search_forward(wchar_t *string)
 {
     Buffer *buffer = editor.world.currentBuffer;
     
     // If the gap is after the point
     if (buffer->point <= buffer->gapBuffer.left)
     {
-        s32 n = buffer->gapBuffer.left-buffer->point+1, m = (s32)strlen(string);
-        char *arr = buffer->gapBuffer.storage;
+        s32 n = buffer->gapBuffer.left-buffer->point+1, m = string_length(string);
+        wchar_t *arr = buffer->gapBuffer.storage;
         
         s32 newLineLoc = string_search_naive_first_forward(arr, n, string, m,
                                                            buffer->point+1, buffer->gapBuffer.left);
@@ -487,16 +436,17 @@ function bool buffer_search_forward(char *string)
         }
         
         // Then search from gapRight+1 to end
-        n = buffer->gapBuffer.storageSize - buffer->gapBuffer.right;
+        n = buffer->gapBuffer.storageLength-buffer->gapBuffer.right;
         
         newLineLoc = string_search_naive_first_forward(arr, n, string, m,
-                                                       buffer->gapBuffer.right+1, buffer->gapBuffer.storageSize);
+                                                       buffer->gapBuffer.right+1, 
+                                                       buffer->gapBuffer.storageLength);
         
         if (newLineLoc > -1)
         {
             // Since newLineLoc is after the gap, we need to transform it to user coords
             // before setting the point.
-            newLineLoc -= gap_buffer_current_gap_size(&buffer->gapBuffer);
+            newLineLoc -= gap_buffer_gap_length(&buffer->gapBuffer);
             
             buffer_point_set(newLineLoc);
             return true;
@@ -508,18 +458,18 @@ function bool buffer_search_forward(char *string)
     {
         s32 gapI = gap_buffer_user_to_gap_coords(&buffer->gapBuffer, buffer->point);
         
-        s32 n = buffer->gapBuffer.storageSize-gapI+1, m = (s32)strlen(string);
-        char *arr = buffer->gapBuffer.storage;
+        s32 n = buffer->gapBuffer.storageLength-gapI+1, m = string_length(string);
+        wchar_t *arr = buffer->gapBuffer.storage;
         
         // Search from point to end
         s32 newLineLoc = string_search_naive_first_forward(arr, n, string, m,
-                                                           gapI+1, buffer->gapBuffer.storageSize);
+                                                           gapI+1, buffer->gapBuffer.storageLength);
         
         if (newLineLoc > -1)
         {
             // Since newLineLoc is after the gap, we need to transform it to user coords
             // before setting the point.
-            newLineLoc -= gap_buffer_current_gap_size(&buffer->gapBuffer);
+            newLineLoc -= gap_buffer_gap_length(&buffer->gapBuffer);
             
             buffer_point_set(newLineLoc);
             return true;
@@ -529,16 +479,17 @@ function bool buffer_search_forward(char *string)
     return false;
 }
 
-function bool buffer_search_backward(char *string)
+function bool 
+buffer_search_backward(wchar_t *string)
 {
     Buffer *buffer = editor.world.currentBuffer;
-    char *arr = buffer->gapBuffer.storage;
+    wchar_t *arr = buffer->gapBuffer.storage;
     
     // If the gap is after the point (or at the point)
     if (buffer->point <= buffer->gapBuffer.left)
     {
         // Search from point-1 to start
-        s32 n = buffer->point-1, m = (s32)strlen(string);
+        s32 n = buffer->point-1, m = string_length(string);
         
         s32 newLineLoc = string_search_naive_first_backward(arr, n, string, m,
                                                             0, buffer->point-1);
@@ -555,21 +506,21 @@ function bool buffer_search_backward(char *string)
         s32 gapI = gap_buffer_user_to_gap_coords(&buffer->gapBuffer, buffer->point);
         
         // First search from gapI-1 to gapRight
-        s32 n = gapI-1-buffer->gapBuffer.right, m = (s32)strlen(string);
+        s32 n = gapI-1-buffer->gapBuffer.right, m = string_length(string);
         
         s32 newLineLoc = string_search_naive_first_backward(arr, n, string, m,
                                                             buffer->gapBuffer.right, gapI-1);
         if (newLineLoc > -1)
         {
             // Again, since it's after the gap, must convert back
-            newLineLoc -= gap_buffer_current_gap_size(&buffer->gapBuffer);
+            newLineLoc -= gap_buffer_gap_length(&buffer->gapBuffer);
             
             buffer_point_set(newLineLoc);
             return true;
         }
         
         // Then search from gapLeft-1 to start
-        n = buffer->gapBuffer.left-1, m = (s32)strlen(string);
+        n = buffer->gapBuffer.left-1, m = string_length(string);
         
         newLineLoc = string_search_naive_first_backward(arr, n, string, m,
                                                         0, buffer->gapBuffer.left-1);
