@@ -65,9 +65,67 @@ handle_user_navigation()
     }
     
     
-    // If contorl is down
+    // If control is down
     if (engine.key.control.down)
     {
+        // If the t key is pressed
+        if (engine.key.down.pressed)
+        {
+            // Save the point
+            s32 oldPoint = buffer->point;
+            
+            // Set the point where the first line currently is
+            buffer_point_set(buffer->firstLine);
+            
+            // Search the first line break from there
+            bool found = true;
+            if (!buffer_search_forward(L"\n"))
+            {
+                // If couldn't find any, flag to do nothing
+                found = false;
+            }
+            
+            if (found)
+            {
+                // Set new first line with one past the found break line
+                buffer->firstLine = buffer->point+1;
+            }
+            
+            // Restore the point
+            buffer_point_set(oldPoint);
+        }
+        
+        // If the t key is pressed
+        if (engine.key.up.pressed)
+        {
+            // Save the point
+            s32 oldPoint = buffer->point;
+            
+            // Set the point where the first line currently is
+            buffer_point_set(buffer->firstLine-1);
+            
+            // Search the first line break from there
+            if (!buffer_search_backward(L"\n"))
+            {
+                // If couldn't find any, set to the start of the buffer
+                buffer_point_set(0);
+            }
+            
+            if (buffer->point > 0)
+            {
+                // set new first line with found break line
+                buffer->firstLine = buffer->point+1;
+            }
+            else
+            {
+                buffer->firstLine = 0;
+            }
+            
+            // Restore the point
+            buffer_point_set(oldPoint);
+        }
+        
+        
         // If the c key is pressed
         if (engine.key.c.pressed)
         {

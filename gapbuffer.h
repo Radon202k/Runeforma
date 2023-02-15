@@ -286,18 +286,21 @@ gap_buffer_delete_range(GapBuffer *buffer, s32 point, s32 mark)
     
     s32 GS = buffer->left; // Gap Start
     
+    // Move the gap to the point
     gap_buffer_move_gap_to_point(buffer, point);
     
     // account for the gap size
     mark = gap_buffer_user_to_gap_coords(buffer, mark);
     
+    // Save gap end
+    s32 oldGE = buffer->right;
+    
+    // Update gap buffer end
+    buffer->right = mark;
+    
     // get the gap end after the gap has moved
     s32 GE = buffer->right;
     
-    // clear from Gap End to Mark
-    
-    clear_array(buffer->storage + GE, mark - GE, char);
-    
-    // set GE to mark
-    buffer->right = mark;
+    // clear from Old Gap End to Mark
+    clear_array(buffer->storage+oldGE, mark-oldGE, wchar_t);
 }

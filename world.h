@@ -29,6 +29,7 @@ world_init(World *world)
         buffer_set_fileName(fullPath);
         buffer_set_name(L"test.txt");
         buffer_read();
+        buffer_point_set(0);
 #endif
     }
     

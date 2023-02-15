@@ -3,6 +3,7 @@
  NOTE: This file development is currently IN PROGRESS.
 ******************************************************************************/
 
+
 // COBJMACROS to be able to use Direct3D 11 API in C
 #define COBJMACROS
 #define WIN32_LEAN_AND_MEAN
@@ -10,6 +11,10 @@
 // Windows API headers
 #include <windows.h>
 #include <windowsx.h>
+
+// Direct Sound 8
+#include <mmeapi.h>
+#include <dsound.h>
 
 // Direct3D 11 API headers
 #include <windows.h>
@@ -191,6 +196,13 @@ string_copy_size(wchar_t *dest, u32 destSize,
     wcsncpy_s(dest, destSize, src, copySize);
 }
 
+function void 
+string_copy_size_ascii(char *dest, u32 destSize,
+                       char *src, u32 copySize)
+{
+    strncpy_s(dest, destSize, src, copySize);
+}
+
 function bool
 string_equal(wchar_t *a, wchar_t *b)
 {
@@ -208,7 +220,6 @@ string_append(wchar_t *dest, u32 destSize, wchar_t *b)
 {
     wcscat_s(dest, destSize, b);
 }
-
 
 #define alloc_size(size) _safe_alloc(size)
 #define alloc_type(type) (type *)_safe_alloc(sizeof(type))
@@ -478,7 +489,7 @@ typedef struct
 // Structure to hold the many keys we support (the keyboard)
 typedef union
 {
-    Key all[13];
+    Key all[14];
     struct
     {
         Key up;
@@ -492,6 +503,7 @@ typedef union
         Key d;
         Key c;
         Key v;
+        Key t;
         Key control;
         Key space;
     };
@@ -549,6 +561,11 @@ typedef struct
     Mouse mouse;
     bool inputCharEntered;
     wchar_t inputChar;
+    
+    WAVEFORMATEX waveFormat;
+    IDirectSound8 *dsound;
+    IDirectSoundBuffer *audioBuffers[32];
+    u32 audioBufferIndex;
 } Engine;
 
 global Engine engine;
@@ -596,10 +613,87 @@ function void update();
 *** [API]
 ******************************************************************************/
 
+typedef struct HashTableNode
+{
+    float id;
+    void *data;
+    struct HashTableNode *next;
+} HashTableNode;
+
+typedef struct
+{
+    u32 storageLength;
+    HashTableNode **storage;
+} HashTable;
+
+function HashTable
+hash_table_create(s32 storageLength)
+{
+    HashTable result = {0};
+    result.storageLength = storageLength;
+    result.storage = alloc_size(storageLength*sizeof(HashTableNode*));
+    return result;
+}
+
+function HashTableNode *
+hash_table_get(HashTable *table, u32 hashIndex, float id)
+{
+    assert(hashIndex < table->storageLength);
+    
+    // Look at hash table position
+    HashTableNode *node = table->storage[hashIndex];
+    
+    // While there are nodes in the collision chain
+    while (node)
+    {
+        // If the ids are the same
+        if (table->storage[hashIndex]->id == id)
+        {
+            // Found the item
+            return node;
+        }
+        
+        // Advance in the collision chain
+        node = node->next;
+    }
+    
+    // Didn't find the node
+    return 0;
+}
+
+function bool
+hash_table_set(HashTable *table, u32 hashIndex, void *data, float id)
+{
+    assert(hashIndex < table->storageLength);
+    
+    HashTableNode *found = hash_table_get(table, hashIndex, id);
+    if (!found)
+    {
+        // Allocate node and set data
+        HashTableNode *newNode = alloc_type(HashTableNode);
+        newNode->id = id;
+        newNode->data = data;
+        
+        // Put the new node at the head of the chain
+        newNode->next = table->storage[hashIndex];
+        table->storage[hashIndex] = newNode;
+        
+        return true;
+    }
+    
+    return false;
+}
+
 function void
 get_exe_path(wchar_t *path, DWORD size)
 {
     GetModuleFileNameW(NULL, path, size);
+}
+
+function void
+get_exe_path_ascii(char *path, DWORD size)
+{
+    GetModuleFileNameA(NULL, path, size);
 }
 
 function void
@@ -641,17 +735,57 @@ build_absolute_path(wchar_t *dest, u32 destSize,
     _snwprintf_s(dest, destSize, _TRUNCATE, L"%s\\%s", dir, fileName);
 }
 
+function void
+build_absolute_path_ascii(char *dest, u32 destSize, 
+                          char *fileName)
+{
+    char exePath[MAX_PATH];
+    get_exe_path_ascii(exePath, MAX_PATH);
+    
+    /** We want to copy the exe path until the last slash
+    *** c:/my/path/to/the/app/main.exe
+    ***                      ^                         */
+    
+    // Find the last slash
+    char *slashPos = 0;
+    char *at = exePath;
+    while (*at)
+    {
+        if (*at == '\\' || *at == '/')
+        {
+            slashPos = at;
+        }
+        
+        at++;
+    }
+    
+    // After going through all the chars, slashPos poitns to the last slash 
+    char *lastSlash = slashPos;
+    
+    // Extract the directory from the exe path
+    char dir[260];
+    
+    // The address of lashSlash minus the address of exePath is equal to
+    // the amount of chars we must copy. That is because arrays are placed
+    // in memory one byte after the other.
+    string_copy_size_ascii(dir, 260, exePath, (u32)(lastSlash - exePath));
+    
+    // Combine the directory and file name to form the absolute path
+    _snprintf_s(dest, destSize, _TRUNCATE, "%s\\%s", dir, fileName);
+}
+
+
 function u8 *
 load_png(wchar_t *filePath, u32 *width, u32 *height)
 {
-	u8 *result = 0;
+    u8 *result = 0;
     
     int asciiSize = WideCharToMultiByte(CP_ACP, 0, filePath, -1, NULL, 0, NULL, NULL);
     char *asciiFilename = (char *)alloc_size(asciiSize);
     WideCharToMultiByte(CP_ACP, 0, filePath, -1, asciiFilename, asciiSize, NULL, NULL);
     
     // Load the image using stbi_load function from stb_image.h library
-	int w, h, nrChannels;
+    int w, h, nrChannels;
     
     size_t byteSize = 0;
     unsigned char *data = stbi_load(asciiFilename, &w, &h, &nrChannels, 0);
@@ -696,10 +830,11 @@ load_png(wchar_t *filePath, u32 *width, u32 *height)
                 float realA = (float)a / 255.0f;
                 
                 // Premultiply the alpha of the r g b components
+                /*
                 r = (u32)(r * realA + .5f);
                 g = (u32)(g * realA + .5f);
                 b = (u32)(b * realA + .5f);
-                
+                */
                 // Write the destination pixel with the premultiplied values
                 // Note that we use the alpha without premultiplying it
                 // since it already has the correct value
@@ -875,215 +1010,237 @@ map_range_to_range(float a1, float a2, float s,
     return t;
 }
 
-
 // Font
-
-typedef struct GlyphNode
-{
-    struct GlyphNode *next;
-    
-    u32 unicode;
-    Sprite glyph;
-    
-} GlyphNode;
 
 typedef struct
 {
-    u32 storageSize;
-    GlyphNode *storage;
-    
-} GlyphHashTable;
+    s32 minX;
+    s32 minY;
+    s32 maxX;
+    s32 maxY;
+} Rect;
 
 typedef struct
 {
     HFONT handle;
     HBITMAP bitmap;
-    TEXTMETRIC metrics;
+    TEXTMETRICW metrics;
     VOID *bytes;
+    float lineAdvance;
+    float charWidth;
+    float maxDescent;
     
-    GlyphHashTable glyphsHashTable;
+    HashTable glyphsTable;
     
 } TruetypeFont;
 
-#define FONT_GLYPH_MAKER_MAX_WIDTH 1024
-#define FONT_GLYPH_MAKER_MAX_HEIGHT 1024
+#define FONT_GLYPH_MAKER_DIM 256
 
-function GlyphHashTable
-glyph_hash_table_create(s32 storageSize)
+#define RGBA(r,g,b,a) (u32)((a << 24) | (b << 16) | (g << 8) | (r << 0))
+
+#define red32 RGBA(237,28,36,255)
+#define yellow32 RGBA(236,227,0,255)
+#define orange32 RGBA(255,127,39,255)
+#define cyan32 RGBA(0,198,191,255)
+#define lime32 RGBA(7,198,0,255)
+#define purple32 RGBA(190,0,198,255)
+#define blue32 RGBA(0,0,255,255)
+
+function u32
+get_hash_for_unicode(HashTable *table, u32 unicode)
 {
-    GlyphHashTable result = {0};
+    assert(table->storageLength % 2 == 0);
+    u32 hash = unicode & (table->storageLength-1);
+    return hash;
+}
+
+function Sprite *
+font_create_glyph(TruetypeFont *font, wchar_t *c, 
+                  Rect *tightBounds, s32 *tightDescent)
+{
+    Sprite *result = alloc_type(Sprite);
     
-    result.storageSize = storageSize;
-    result.storage = (GlyphNode *)malloc(storageSize*sizeof(GlyphNode));
-    memset((u8 *)result.storage, 0, storageSize*sizeof(GlyphNode));
+    // Get the char width
+    SIZE size;
+    GetTextExtentPoint32W(engine.deviceContext, c, 1, &size);
+    
+    s32 width = size.cx;
+    s32 height = size.cy;
+    
+    s32 charSize = (s32)wcslen(c);
+    
+    s32 prestepX = 30;
+    s32 prestepY = 30;
+    
+    // Write the char to the bitmap
+    TextOutW(engine.deviceContext, prestepX, prestepY, c, charSize);
+    
+    s32 minX = 0;
+    s32 minY = 0;
+    s32 maxX = width;
+    s32 maxY = height;
+    
+    s32 tightMinX = 1000000;
+    s32 tightMinY = 1000000;
+    s32 tightMaxX =-1000000;
+    s32 tightMaxY =-1000000;
+    
+#if 1
+    // Find tight bounding box
+    bool foundTightBox = false;
+    
+    // Walk from last row to last row minus height
+    for (s32 j = 0;
+         j < FONT_GLYPH_MAKER_DIM;
+         ++j)
+    {
+        for (s32 i = 0; 
+             i < FONT_GLYPH_MAKER_DIM;
+             ++i)
+        {
+            u32 *pixel = (u32 *)((u8 *)font->bytes + 
+                                 j*(FONT_GLYPH_MAKER_DIM*4) + 
+                                 i*4);
+            if (*pixel != 0)
+            {
+                foundTightBox = true;
+                if (tightMinX > i) tightMinX = i;
+                if (tightMinY > j) tightMinY = j;
+                if (tightMaxX < i) tightMaxX = i;
+                if (tightMaxY < j) tightMaxY = j;
+            }
+        }
+    }
+    
+    s32 alignX = 0;
+    s32 alignY = 0;
+    
+    // Recalculate tight width and height
+    s32 tightWidth = 0;
+    s32 tightHeight = 0;
+    if (foundTightBox)
+    {
+        *tightDescent = font->metrics.tmDescent-(font->metrics.tmHeight-tightMaxY)-prestepY;
+        
+        // Pixels to move char to the right
+        alignX = prestepX-tightMinX;
+        alignY = *tightDescent;
+        
+        // Expand tight bounds to include 1 px boder
+        --tightMinX;
+        --tightMinY;
+        ++tightMaxX;
+        ++tightMaxY;
+        
+        tightWidth = tightMaxX-tightMinX+1;
+        tightHeight = tightMaxY-tightMinY+1;
+        
+        
+#if 1
+        
+        tightBounds->minX = tightMinX;
+        tightBounds->minY = tightMinY;
+        tightBounds->maxX = tightMaxX;
+        tightBounds->maxY = tightMaxY;
+        
+        minX = tightMinX;
+        minY = tightMinY;
+        maxX = tightMaxX;
+        maxY = tightMaxY;
+        width = tightWidth;
+        height = tightHeight;
+        prestepX = 0;
+        prestepY = 0;
+#endif
+    }
+    
+#endif
+    
+    // Allocate memory for the bytes
+    u8 *bytes = (u8 *)malloc(width*height*4);
+    
+    // Clear to zero
+    memset(bytes, 0, width*height*4);
+    
+    // For every row
+    u8 *destRow = bytes;
+    
+    // Prestep the source pointer
+    u8 *srcRow = ((u8 *)font->bytes + 
+                  minY*FONT_GLYPH_MAKER_DIM*4 +
+                  (minX+prestepX)*4);
+    
+    for (s32 y = minY; y < maxY; ++y)
+    {
+        // For every col
+        u32 *pixel = (u32 *)srcRow;
+        u32 *dest = (u32 *)destRow;
+        
+        for (s32 x = minX; x < maxX; ++x)
+        {
+            u32 color = *pixel++;
+            u32 a = ((color >> 16) & 0xff);
+            
+            // Write it to all components
+            *dest++ =  RGBA(255,255,255,a);
+        }
+        
+        // Advance the row
+        destRow += 4*width;
+        srcRow += 4*FONT_GLYPH_MAKER_DIM;
+    }
+    
+    // Create the sprite
+    *result = sprite_create(width, height, bytes);
+    
+    result->align.x = (float)alignX;
+    result->align.y = (float)alignY;
+    
+    // Free the allocated memory
+    free(bytes);
     
     return result;
 }
 
-function u32
-get_hash_for_unicode(GlyphHashTable *table, u32 unicode)
+function s32
+font_pixel_height(s32 pointHeight)
 {
-    assert(table->storageSize % 2 == 0);
-    u32 hash = unicode & (table->storageSize-1);
-    return hash;
-}
-
-function Sprite
-glyph_hash_table_get_sprite(GlyphHashTable *table, u32 unicode)
-{
-    u32 hash = get_hash_for_unicode(table, unicode);
-    // TODO: handle collisions
-    return table->storage[hash].glyph;
-}
-
-function void
-glyph_hash_table_set(GlyphHashTable *table, u32 unicode, GlyphNode glyphNode)
-{
-    u32 hash = get_hash_for_unicode(table, unicode);
-    // TODO: handle collisions
-    table->storage[hash] = glyphNode;
-}
-
-function Sprite
-font_create_glyph(TruetypeFont *font, wchar_t c)
-{
-    Sprite result = {0};
-    
-    // Get the char width
-    SIZE size;
-    GetTextExtentPoint32W(engine.deviceContext, &c, 1, &size);
-    
-    int width = size.cx;
-    int height = size.cy;
-    
-    // Set the background color to back
-    SetBkColor(engine.deviceContext, RGB(0,0,0));
-    
-    // Set the text color to white
-    SetTextColor(engine.deviceContext, RGB(255,255,255));
-    
-    // Write the char to the bitmap
-    TextOutW(engine.deviceContext, 0, 0, &c, 1);
-    
-    // Find out the tight bounds
-    s32 minX = 10000;
-    s32 minY = 10000;
-    s32 maxX = -10000;
-    s32 maxY = -10000;
-    u32 *row = (u32 *)font->bytes;
-    for (s32 y = 0;
-         y < height;
-         ++y)
-    {
-        u32 *pixel = row;
-        for (s32 x = 0;
-             x < width;
-             ++x)
-        {
-            if (*pixel != 0)
-            {
-                if (minX > x) minX = x;
-                if (minY > y) minY = y;
-                if (maxX < x) maxX = x;
-                if (maxY < y) maxY = y;
-            }
-            
-            ++pixel;
-        }
-        row += FONT_GLYPH_MAKER_MAX_WIDTH;
-    }
-    
-    // Special case for space
-    if (minX == 10000 && minY == 10000 &&
-        maxX == -10000 && maxY == -10000)
-    {
-        minX = 0;
-        minY = 0;
-        maxX = size.cx;
-        maxY = size.cy;
-    }
-    
-    // Copy bytes from glyph maker bytes to our own memory
-    if (minX < maxX)
-    {
-        // Update width and height
-        width = (maxX-minX)+1;
-        height = (maxY-minY)+1;
-        
-        // Allocate memory for the bytes
-        u8 *bytes = (u8 *)malloc(width*height*4);
-        
-        // Clear to zero
-        memset(bytes, 0, width*height*4);
-        
-        // For every row
-        u8 *destRow = bytes;
-        u32 *srcRow = (u32 *)font->bytes + minY*FONT_GLYPH_MAKER_MAX_WIDTH + minX;
-        for (s32 y = minY;
-             y <= maxY;
-             ++y)
-        {
-            // For every col
-            u32 *pixel = (u32 *)srcRow;
-            u32 *dest = (u32 *)destRow;
-            for (s32 x = minX;
-                 x <= maxX;
-                 ++x)
-            {
-                u32 color = *pixel;
-                u32 a = ((color >> 16) & 0xff);
-                
-                pixel++;
-                
-                // Write it to all components
-                *dest++ = ((a << 24) |
-                           (255 << 16) |
-                           (255 << 8) |
-                           (255 << 0));
-            }
-            
-            // Advance the row
-            destRow += 4*width;
-            srcRow += FONT_GLYPH_MAKER_MAX_WIDTH;
-        }
-        
-        // Create the sprite
-        result = sprite_create(width, height, bytes);
-        
-        result.align.y = (float)(maxY - size.cy + font->metrics.tmDescent);
-        
-        // Free the allocated memory
-        free(bytes);
-    }
-    
+    s32 result = MulDiv(pointHeight, 
+                        GetDeviceCaps(engine.deviceContext, LOGPIXELSY), 
+                        GetDeviceCaps(engine.deviceContext, LOGPIXELSX));
     return result;
 }
 
 function TruetypeFont
 font_create_from_file(wchar_t *fileName, wchar_t *fontName,
-                      int fontHeight)
+                      int fontHeightPoints)
 {
     TruetypeFont result = {0};
     
     // Create the font
-    AddFontResourceExW(fileName, FR_PRIVATE, 0);
+    int filesAdded = AddFontResourceW(fileName);
+    assert(filesAdded == 1);
     
-    result.handle = CreateFontW(fontHeight, 0, 0, 0, 
+    result.handle = CreateFontW(font_pixel_height(fontHeightPoints), 
+                                0, 0, 0, 
                                 FW_NORMAL, 
                                 false, // Italic
                                 false, // Underline
                                 false, // Strikeout
                                 DEFAULT_CHARSET,
-                                OUT_DEFAULT_PRECIS,
+                                OUT_OUTLINE_PRECIS,
                                 CLIP_DEFAULT_PRECIS,
-                                PROOF_QUALITY,
-                                DEFAULT_PITCH|FF_DONTCARE,
+                                CLEARTYPE_QUALITY,
+                                DEFAULT_PITCH,
                                 fontName);
+    
+    assert(result.handle &&
+           result.handle != INVALID_HANDLE_VALUE);
     
     BITMAPINFO info = {0};
     info.bmiHeader.biSize = sizeof(info.bmiHeader);
-    info.bmiHeader.biWidth = FONT_GLYPH_MAKER_MAX_WIDTH;
-    info.bmiHeader.biHeight = -FONT_GLYPH_MAKER_MAX_HEIGHT;
+    info.bmiHeader.biWidth = FONT_GLYPH_MAKER_DIM;
+    info.bmiHeader.biHeight = -FONT_GLYPH_MAKER_DIM;
     info.bmiHeader.biPlanes = 1;
     info.bmiHeader.biBitCount = 32;
     
@@ -1093,8 +1250,8 @@ font_create_from_file(wchar_t *fileName, wchar_t *fontName,
                                      &result.bytes, 0, 0);
     
     // Clear to zero
-    memset(result.bytes, 0, FONT_GLYPH_MAKER_MAX_WIDTH*
-           FONT_GLYPH_MAKER_MAX_HEIGHT*4);
+    memset(result.bytes, 0, 
+           FONT_GLYPH_MAKER_DIM*FONT_GLYPH_MAKER_DIM*4);
     
     
     // Select font bitmap
@@ -1104,10 +1261,27 @@ font_create_from_file(wchar_t *fileName, wchar_t *fontName,
     SelectObject(engine.deviceContext, result.handle);
     
     // Get font text metrics
-    GetTextMetrics(engine.deviceContext, &result.metrics);
+    TEXTMETRICW metrics = {0};
+    GetTextMetricsW(engine.deviceContext, &metrics);
+    
+    result.metrics = metrics;
+    
+    // Set the background color to back
+    SetBkColor(engine.deviceContext, RGB(0,0,0));
+    
+    // Set the text color to white
+    SetTextColor(engine.deviceContext, RGB(255,255,255));
+    
+    // Get the line advance
+    result.lineAdvance = (float)metrics.tmHeight - metrics.tmInternalLeading;
+    result.charWidth = (float)metrics.tmAveCharWidth;
     
     // Create the glyphs hash table
-    result.glyphsHashTable = glyph_hash_table_create(512);
+    result.glyphsTable = hash_table_create(512);
+    
+    s32 maxGlyphW = -10000;
+    s32 maxGlyphH = -10000;
+    s32 maxDescent = -10000;
     
     // Create the basic Latin glyphs
     for (s32 i = 32; i <= 255; i++)
@@ -1117,12 +1291,35 @@ font_create_from_file(wchar_t *fileName, wchar_t *fontName,
             int y = 3;
         }
         
+        wchar_t character[2] = { (wchar_t)i, 0 };
         
-        GlyphNode node = {0};
-        node.glyph = font_create_glyph(&result, (wchar_t)i);
-        node.unicode = i;
-        glyph_hash_table_set(&result.glyphsHashTable, i, node);
+        // Allocate the glyph with dynamic memory
+        Rect tightBounds = {0};
+        s32 tightDescent = 0;
+        Sprite *glyph = font_create_glyph(&result, character, 
+                                          &tightBounds, &tightDescent);
+        
+        if (tightBounds.maxX != 0 && tightBounds.maxY != 0)
+        {
+            s32 tightWidth = tightBounds.maxX-tightBounds.minX;
+            s32 tightHeight = tightBounds.maxY-tightBounds.minY;
+            
+            if (maxGlyphW < tightWidth) maxGlyphW = tightWidth;
+            if (maxGlyphH < tightHeight) maxGlyphH = tightHeight;
+            if (maxDescent < tightDescent) maxDescent = tightDescent;
+        }
+        
+        // Set the glyph into the glyph hash table
+        hash_table_set(&result.glyphsTable, i, glyph, (float)i);
     }
+    
+    result.lineAdvance = (float)maxGlyphH;
+    //result.charWidth = (float)maxGlyphW;
+    result.maxDescent = (float)maxDescent;
+    
+    DeleteObject(result.bitmap);
+    DeleteObject(result.handle);
+    RemoveFontResourceW(fileName);
     
     return result;
 }
@@ -1238,20 +1435,30 @@ draw_sprite(SpriteGroup *group,
                    layer);
 }
 
-function float
+function void
 draw_glyph(SpriteGroup *group, TruetypeFont *font,
            u32 unicode, Vector2 pos, Color col, float layer)
 {
-    float width = 0;
+#if 0
+    // Draw the baseline
+    base_draw_line(pos.x, pos.y,
+                   pos.x + font->charWidth-1, pos.y,
+                   .8f,.8f,.8f,.8f, 
+                   -100);
+#endif
     
-    Sprite glyphSprite = glyph_hash_table_get_sprite(&font->glyphsHashTable, unicode);
-    
-    pos.y -= glyphSprite.align.y;
-    
-    draw_sprite(group, glyphSprite, pos, v2(1,1), col, layer);
-    
-    width = glyphSprite.size.x;
-    return width;
+    HashTableNode *node = hash_table_get(&font->glyphsTable, unicode, (float)unicode);
+    if (node)
+    {
+        Sprite *glyphSprite = (Sprite *)node->data;
+        if (glyphSprite)
+        {
+            pos.x -= glyphSprite->align.x;
+            pos.y -= glyphSprite->align.y;
+            
+            draw_sprite(group, *glyphSprite, pos, v2(1,1), col, layer);
+        }
+    }
 }
 
 function void
@@ -1261,9 +1468,9 @@ draw_string(SpriteGroup *group, TruetypeFont *font,
     wchar_t *at = s;
     while (*at)
     {
-        float width = draw_glyph(group, font, *at, pos, col, layer);
+        draw_glyph(group, font, *at, pos, col, layer);
         
-        pos.x += width;
+        pos.x += font->charWidth;
         
         at++;
     }
@@ -1316,6 +1523,7 @@ LRESULT window_proc(HWND window, UINT message, WPARAM wParam, LPARAM lParam)
             else if (wParam == 'D')           key = &engine.key.d;
             else if (wParam == 'C')           key = &engine.key.c;
             else if (wParam == 'V')           key = &engine.key.v;
+            else if (wParam == 'T')           key = &engine.key.t;
             else if (wParam == VK_CONTROL)    key = &engine.key.control;
             else if (wParam == VK_SPACE)      key = &engine.key.space;
             
@@ -1406,17 +1614,17 @@ create_sprites_shaders()
         {
             wchar_t *msg = (wchar_t *)
             (ID3D10Blob_GetBufferPointer(errorVertexMessages));
-			OutputDebugStringW(msg);
+            OutputDebugStringW(msg);
             exit(1);
         }
-		else
+        else
         {
             exit(1);
         }
     }
     
     // And create the vertex shader if compilation went ok
-	ID3D11Device_CreateVertexShader(engine.device,
+    ID3D11Device_CreateVertexShader(engine.device,
                                     ID3D10Blob_GetBufferPointer(compiledVS),
                                     ID3D10Blob_GetBufferSize(compiledVS),
                                     NULL,
@@ -1450,16 +1658,16 @@ create_sprites_shaders()
         {
             wchar_t *msg = (wchar_t *)
             (ID3D10Blob_GetBufferPointer(errorPixelMessages));
-			OutputDebugStringW(msg);
+            OutputDebugStringW(msg);
             exit(1);
         }
-		else
+        else
         {
             exit(1);
         }
     }
     // And create the pixel shader if compilation went ok
-	ID3D11Device_CreatePixelShader(engine.device,
+    ID3D11Device_CreatePixelShader(engine.device,
                                    ID3D10Blob_GetBufferPointer(compiledPS),
                                    ID3D10Blob_GetBufferSize(compiledPS),
                                    NULL,
@@ -1493,7 +1701,7 @@ create_sprites_shaders()
                                               &engine.spritesInputLayout)))
     {
         exit(1);
-	}
+    }
 }
 
 function void
@@ -1540,17 +1748,17 @@ create_lines_shaders()
         {
             wchar_t *msg = (wchar_t *)
             (ID3D10Blob_GetBufferPointer(errorVertexMessages));
-			OutputDebugStringW(msg);
+            OutputDebugStringW(msg);
             exit(1);
         }
-		else
+        else
         {
             exit(1);
         }
     }
     
     // And create the vertex shader if compilation went ok
-	ID3D11Device_CreateVertexShader(engine.device,
+    ID3D11Device_CreateVertexShader(engine.device,
                                     ID3D10Blob_GetBufferPointer(compiledVS),
                                     ID3D10Blob_GetBufferSize(compiledVS),
                                     NULL,
@@ -1580,16 +1788,16 @@ create_lines_shaders()
         {
             wchar_t *msg = (wchar_t *)
             (ID3D10Blob_GetBufferPointer(errorPixelMessages));
-			OutputDebugStringW(msg);
+            OutputDebugStringW(msg);
             exit(1);
         }
-		else
+        else
         {
             exit(1);
         }
     }
     // And create the pixel shader if compilation went ok
-	ID3D11Device_CreatePixelShader(engine.device,
+    ID3D11Device_CreatePixelShader(engine.device,
                                    ID3D10Blob_GetBufferPointer(compiledPS),
                                    ID3D10Blob_GetBufferSize(compiledPS),
                                    NULL,
@@ -1620,7 +1828,7 @@ create_lines_shaders()
                                               &engine.linesInputLayout)))
     {
         exit(1);
-	}
+    }
 }
 
 function void
@@ -1634,23 +1842,23 @@ create_sprites_vertex_buffer()
     
     // Then we describe the vertex buffer that we want
     D3D11_BUFFER_DESC vertexBufferDesc =
-	{
-		vertexBufferSize,
-		D3D11_USAGE_DYNAMIC,
+    {
+        vertexBufferSize,
+        D3D11_USAGE_DYNAMIC,
         D3D11_BIND_VERTEX_BUFFER,
         D3D11_CPU_ACCESS_WRITE,
-		0,
-		sizeof(Vertex3D),
-	};
+        0,
+        sizeof(Vertex3D),
+    };
     
     // And create the vertex buffer
-	if (FAILED(ID3D11Device_CreateBuffer(engine.device,
+    if (FAILED(ID3D11Device_CreateBuffer(engine.device,
                                          &vertexBufferDesc, 
                                          0,
                                          &engine.spritesVertexBuffer)))
-	{
-		exit(1);
-	}
+    {
+        exit(1);
+    }
 }
 
 function void
@@ -1667,23 +1875,23 @@ create_lines_vertex_buffer()
     
     // Then we describe the vertex buffer that we want
     D3D11_BUFFER_DESC vertexBufferDesc =
-	{
-		vertexBufferSize,
-		D3D11_USAGE_DYNAMIC,
+    {
+        vertexBufferSize,
+        D3D11_USAGE_DYNAMIC,
         D3D11_BIND_VERTEX_BUFFER,
         D3D11_CPU_ACCESS_WRITE,
-		0,
-		sizeof(LineVertex3D),
-	};
+        0,
+        sizeof(LineVertex3D),
+    };
     
     // And create the vertex buffer
-	if (FAILED(ID3D11Device_CreateBuffer(engine.device,
+    if (FAILED(ID3D11Device_CreateBuffer(engine.device,
                                          &vertexBufferDesc, 
                                          0,
                                          &engine.linesVertexBuffer)))
-	{
-		exit(1);
-	}
+    {
+        exit(1);
+    }
 }
 
 function u32
@@ -2072,6 +2280,164 @@ swap_chain_resize()
     }
 }
 
+typedef struct
+{
+    char chunkID[4];
+    u32 chunkSize;
+    char format[4];
+} WavRIFFHeader;
+
+typedef struct
+{
+    char subChunkID[4];
+    u32 subChunkSize;
+    u16 audioFormat;
+    u16 numChannels;
+    u32 sampleRate;
+    u32 byteRate;
+    u16 blockAlign;
+    u16 bitsPerSample;
+} WavFMTChunk;
+
+typedef struct
+{
+    char subChunkID[4];
+    u32 subChunkSize;
+} WavDataChunk;
+
+typedef struct
+{
+    WavRIFFHeader riffHeader;
+    WavFMTChunk fmtChunk;
+    WavDataChunk dataChunk;
+    
+    wchar_t fileName[260];
+    s16 *sampleData;
+    u32 sampleCount;
+} Sound;
+
+function Sound
+load_wav(wchar_t *filePath, wchar_t *fileName)
+{
+    Sound result = {0};
+    
+    // Open file
+    FILE *file;
+    _wfopen_s(&file, filePath, L"rb");
+    
+    // If the file exists
+    if (file != 0)
+    {
+        // Read the RIFF
+        fread(&result.riffHeader, sizeof(WavRIFFHeader), 1, file);
+        
+        // Read the FMT chunk
+        fread(&result.fmtChunk, sizeof(WavFMTChunk), 1, file);
+        
+        // Read the Data chunk
+        fread(&result.dataChunk, sizeof(WavDataChunk), 1, file);
+        
+        // Calculate sample count
+        result.sampleCount = (result.dataChunk.subChunkSize
+                              / (result.fmtChunk.numChannels *
+                                 (result.fmtChunk.bitsPerSample/8)));
+        
+        // If the audio format is PCM
+        if (result.fmtChunk.audioFormat == 1)
+        {
+            // Allocate space for audio bytes
+            result.sampleData = alloc_size(result.dataChunk.subChunkSize);
+            if (result.sampleData != 0)
+            {
+                // Read the audio bytes
+                fread(result.sampleData, result.dataChunk.subChunkSize, 1, file);
+                
+                // Copy the file name
+                string_copy(result.fileName, 260, fileName);
+            }
+            
+        }
+        
+        // Close the file handle
+        fclose(file);
+    }
+    
+    return result;
+}
+
+// Direct Sound 8
+// Initialize DirectSound
+function bool
+dsound8_init(void)
+{
+    // Create DirectSound object
+    if (FAILED(DirectSoundCreate8(0, &engine.dsound, 0))) return false;
+    
+    // Set the wav format
+    engine.waveFormat.wFormatTag = WAVE_FORMAT_PCM;
+    engine.waveFormat.nChannels = 2;
+    engine.waveFormat.nSamplesPerSec = 44100;
+    engine.waveFormat.wBitsPerSample = 16;
+    engine.waveFormat.nBlockAlign = (engine.waveFormat.nChannels*engine.waveFormat.wBitsPerSample)/8;
+    engine.waveFormat.nAvgBytesPerSec = engine.waveFormat.nSamplesPerSec*engine.waveFormat.nBlockAlign;
+    
+    // Set cooperative level
+    if (FAILED(IDirectSound8_SetCooperativeLevel(engine.dsound, 
+                                                 engine.window, 
+                                                 DSSCL_PRIORITY))) return false;
+    
+    // Primary buffer is only used to set the format
+    IDirectSoundBuffer *primaryBuffer;
+    
+    DSBUFFERDESC primaryBufferDesc = {0};
+    primaryBufferDesc.dwSize = sizeof(primaryBufferDesc);
+    primaryBufferDesc.dwFlags = DSBCAPS_PRIMARYBUFFER;
+    
+    // Create primary buffer to set the format
+    if (FAILED(IDirectSound8_CreateSoundBuffer(engine.dsound, 
+                                               &primaryBufferDesc, 
+                                               &primaryBuffer, 
+                                               0))) return false;
+    
+    // Set the format
+    if (FAILED(IDirectSoundBuffer_SetFormat(primaryBuffer,
+                                            &engine.waveFormat))) return false;
+    
+    
+    // If got to this point, all is good
+    return true;
+}
+
+function IDirectSoundBuffer *
+dsound8_create_buffer(wchar_t *filePath, wchar_t *fileName)
+{
+    Sound sound = load_wav(filePath, fileName);
+    
+    IDirectSoundBuffer *result = 0;
+    if (engine.audioBufferIndex == array_count(engine.audioBuffers))
+    {
+        return false;
+    }
+    
+    // The actual audio buffer description
+    DSBUFFERDESC bufferDescription = {0};
+    bufferDescription.dwSize = sizeof(bufferDescription);
+    bufferDescription.dwFlags = 0;
+    bufferDescription.dwBufferBytes = sound.sampleCount*2*sizeof(s16);
+    bufferDescription.lpwfxFormat = &engine.waveFormat;
+    
+    // Create the actual audio buffer
+    if (FAILED(IDirectSound8_CreateSoundBuffer(engine.dsound,
+                                               &bufferDescription, 
+                                               &engine.audioBuffers[engine.audioBufferIndex],
+                                               0))) return false;
+    
+    result = engine.audioBuffers[engine.audioBufferIndex];
+    
+    engine.audioBufferIndex++;
+    
+    return result;
+}
 
 /******************************************************************************
 *** [ENTRYPOINT]
@@ -2245,7 +2611,7 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev,
                                             &engine.dsbTexture)))
     {
         exit(1);
-	}
+    }
     
     // Configure the texture atlas
     engine.spriteAtlas.size = SPRITE_ATLAS_SIZE;
@@ -2274,6 +2640,9 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev,
         engine.spriteAtlas.size * 4;
     engine.spriteAtlas.bytes = (u8 *)malloc(atlasMemorySize);
     
+    // Init the audio engine
+    dsound8_init();
+    
     // Call the app because they will be the ones loading the pngs 
     init();
     
@@ -2290,8 +2659,8 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev,
                                             &atlasTextureDesc,
                                             &atlasData,
                                             &engine.atlasTexture)))
-	{
-		exit(1);
+    {
+        exit(1);
     }
     
     // Now we can create the views, first the render target view
@@ -2302,7 +2671,7 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev,
                                                    &engine.rtv)))
     {
         exit(1);
-	}
+    }
     
     // Then, to create the ds view we need a depth stencil view description
     D3D11_DEPTH_STENCIL_VIEW_DESC dsvDesc = 
@@ -2322,7 +2691,7 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev,
                                                    &engine.dsv)))
     {
         exit(1);
-	}
+    }
     
     // Create the shader resource view for the texture
     D3D11_SHADER_RESOURCE_VIEW_DESC atlasTextureSRVDesc;
@@ -2336,9 +2705,9 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev,
                                                      engine.atlasTexture, 
                                                      &atlasTextureSRVDesc, 
                                                      &engine.atlasTexSRV)))
-	{
-		exit(1);
-	}
+    {
+        exit(1);
+    }
     
     // Now we will need to create some D3D11 states, we need a ds desc
     D3D11_DEPTH_STENCIL_DESC dsDesc = 
@@ -2359,7 +2728,7 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev,
                                                     &engine.dss)))
     {
         exit(1);
-	}
+    }
     
     // We need an array of render target blend descs. We could potentially
     // render up to 8 render targets at once, hence 8 blend states.
@@ -2392,7 +2761,7 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev,
                                              &engine.blendState)))
     {
         exit(1);
-	}
+    }
     
     // Now for the rasterizer state we need a rasterizer desc
     D3D11_RASTERIZER_DESC rasterizerDesc =
@@ -2435,7 +2804,7 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev,
                                                &engine.samplerState)))
     {
         exit(1);
-	}	
+    }	
     
     create_sprites_shaders();
     create_lines_shaders();
@@ -2452,23 +2821,23 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev,
     // matrix to the vertex shader stage of the pipeline, thus the 
     // vertexConstantBufferDesc name
     D3D11_BUFFER_DESC vertexConstantBufferDesc =
-	{
-		sizeof(VertexConstantBuffer),
-		D3D11_USAGE_DEFAULT,
+    {
+        sizeof(VertexConstantBuffer),
+        D3D11_USAGE_DEFAULT,
         D3D11_BIND_CONSTANT_BUFFER,
         0,
-		0,
-		constantBufferStride,
-	};
+        0,
+        constantBufferStride,
+    };
     
     // Then we make the constant buffer to use with the vertex buffer
-	if (FAILED(ID3D11Device_CreateBuffer(engine.device,
+    if (FAILED(ID3D11Device_CreateBuffer(engine.device,
                                          &vertexConstantBufferDesc, 
                                          0,
                                          &engine.vertexCBuffer)))
-	{
-		exit(1);
-	}
+    {
+        exit(1);
+    }
     
     u32 perGroupCount = MAX_ALLOWED_RENDERED_SPRITES /
         array_count(engine.spriteGroups);

@@ -14,6 +14,7 @@ typedef struct Buffer
     struct Buffer *nextChainEntry;
     wchar_t bufferName[512];
     
+    s32 firstLine;
     s32 point;
     s32 currentLine;
     s32 numChars;
