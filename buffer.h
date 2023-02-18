@@ -253,9 +253,25 @@ buffer_read(void)
             MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, (LPCCH)file.bytes, -1, text, textLength);
         }
         
-        // Register number of chars
-        buffer->numChars = 0;
-        buffer->numLines = 0;
+        // Process the file
+        buffer->numLines = 1;
+        s32 lastLineCharP = 0;
+        for (s32 charIndex = 0;
+             charIndex < textLength;
+             ++charIndex)
+        {
+            if (text[charIndex] == 10)
+            {
+                buffer->numLines++;
+                lastLineCharP = charIndex;
+            }
+            else
+            {
+                buffer->numChars++;
+            }
+        }
+        
+        buffer->lastLineCharP = lastLineCharP;
         buffer->currentLine = 1;
     }
     
@@ -278,7 +294,7 @@ buffer_write(void)
 {
     Buffer *buffer = editor.world.currentBuffer;
     
-    u32 dataLength = gap_buffer_current_length(&buffer->gapBuffer);
+    u32 dataLength = gap_buffer_length(&buffer->gapBuffer);
     wchar_t *data = alloc_array(dataLength+1, wchar_t);
     
     gap_buffer_get_range(&buffer->gapBuffer, 
@@ -298,7 +314,7 @@ buffer_point_set(s32 loc)
     Buffer *buffer = editor.world.currentBuffer;
     
     // If the location is a valid position [0,bufferSize]
-    if (loc >= 0 && loc <= gap_buffer_current_length(&buffer->gapBuffer))
+    if (loc >= 0 && loc <= gap_buffer_length(&buffer->gapBuffer))
     {
         // Set the point and return true
         buffer->point = loc;
@@ -317,7 +333,7 @@ buffer_point_move(s32 count)
     s32 currentLocation = buffer->point;
     
     s32 newLocation = currentLocation + count;
-    s32 currentGapBufferSize = gap_buffer_current_length(&buffer->gapBuffer);
+    s32 currentGapBufferSize = gap_buffer_length(&buffer->gapBuffer);
     
     // If new location is negative
     if (newLocation < 0)
@@ -380,19 +396,11 @@ function s32 buffer_count_to_location()
 // TODO: Marks
 
 function wchar_t 
-buffer_get_char_at(s32 loc)
+buffer_get_char(s32 loc)
 {
     Buffer *buffer = editor.world.currentBuffer;
-    s32 gapI = gap_buffer_user_to_gap_coords(&buffer->gapBuffer, loc);
-    wchar_t result = buffer->gapBuffer.storage[gapI];
+    wchar_t result = gap_buffer_get_char(&buffer->gapBuffer, loc);
     return result;
-}
-
-function wchar_t
-buffer_get_char()
-{
-    Buffer *buffer = editor.world.currentBuffer;
-    return buffer_get_char_at(buffer->point);
 }
 
 // Returns the name of the current buffer
@@ -417,62 +425,67 @@ buffer_set_fileName(wchar_t *fileName)
 }
 
 function bool 
-buffer_search_forward(wchar_t *string)
+buffer_search_forward(wchar_t **stringArray, s32 arrayN)
 {
     Buffer *buffer = editor.world.currentBuffer;
     
-    // If the gap is after the point
-    if (buffer->point <= buffer->gapBuffer.left)
+    for (s32 k = 0;
+         k < arrayN;
+         ++k)
     {
-        s32 n = buffer->gapBuffer.left-buffer->point+1, m = string_length(string);
-        wchar_t *arr = buffer->gapBuffer.storage;
-        
-        s32 newLineLoc = string_search_naive_first_forward(arr, n, string, m,
-                                                           buffer->point+1, buffer->gapBuffer.left);
-        if (newLineLoc > -1)
+        // If the gap is after the point
+        if (buffer->point <= buffer->gapBuffer.left)
         {
-            buffer_point_set(newLineLoc);
-            return true;
+            s32 n = buffer->gapBuffer.left-buffer->point+1, m = string_length(stringArray[k]);
+            wchar_t *arr = buffer->gapBuffer.storage;
+            
+            s32 newLineLoc = string_search_naive_first_forward(arr, n, stringArray[k], m,
+                                                               buffer->point+1, buffer->gapBuffer.left);
+            if (newLineLoc > -1)
+            {
+                buffer_point_set(newLineLoc);
+                return true;
+            }
+            
+            // Then search from gapRight+1 to end
+            n = buffer->gapBuffer.storageLength-buffer->gapBuffer.right;
+            
+            newLineLoc = string_search_naive_first_forward(arr, n, stringArray[k], m,
+                                                           buffer->gapBuffer.right+1, 
+                                                           buffer->gapBuffer.storageLength);
+            
+            if (newLineLoc > -1)
+            {
+                // Since newLineLoc is after the gap, we need to transform it to user coords
+                // before setting the point.
+                newLineLoc -= gap_buffer_gap_length(&buffer->gapBuffer);
+                
+                buffer_point_set(newLineLoc);
+                return true;
+            }
         }
         
-        // Then search from gapRight+1 to end
-        n = buffer->gapBuffer.storageLength-buffer->gapBuffer.right;
-        
-        newLineLoc = string_search_naive_first_forward(arr, n, string, m,
-                                                       buffer->gapBuffer.right+1, 
-                                                       buffer->gapBuffer.storageLength);
-        
-        if (newLineLoc > -1)
+        // If the gap is before the point
+        else if (buffer->point > buffer->gapBuffer.left)
         {
-            // Since newLineLoc is after the gap, we need to transform it to user coords
-            // before setting the point.
-            newLineLoc -= gap_buffer_gap_length(&buffer->gapBuffer);
+            s32 gapI = gap_buffer_user_to_gap_coords(&buffer->gapBuffer, buffer->point);
             
-            buffer_point_set(newLineLoc);
-            return true;
-        }
-    }
-    
-    // If the gap is before the point
-    else if (buffer->point > buffer->gapBuffer.left)
-    {
-        s32 gapI = gap_buffer_user_to_gap_coords(&buffer->gapBuffer, buffer->point);
-        
-        s32 n = buffer->gapBuffer.storageLength-gapI+1, m = string_length(string);
-        wchar_t *arr = buffer->gapBuffer.storage;
-        
-        // Search from point to end
-        s32 newLineLoc = string_search_naive_first_forward(arr, n, string, m,
-                                                           gapI+1, buffer->gapBuffer.storageLength);
-        
-        if (newLineLoc > -1)
-        {
-            // Since newLineLoc is after the gap, we need to transform it to user coords
-            // before setting the point.
-            newLineLoc -= gap_buffer_gap_length(&buffer->gapBuffer);
+            s32 n = buffer->gapBuffer.storageLength-gapI+1, m = string_length(stringArray[k]);
+            wchar_t *arr = buffer->gapBuffer.storage;
             
-            buffer_point_set(newLineLoc);
-            return true;
+            // Search from point to end
+            s32 newLineLoc = string_search_naive_first_forward(arr, n, stringArray[k], m,
+                                                               gapI+1, buffer->gapBuffer.storageLength);
+            
+            if (newLineLoc > -1)
+            {
+                // Since newLineLoc is after the gap, we need to transform it to user coords
+                // before setting the point.
+                newLineLoc -= gap_buffer_gap_length(&buffer->gapBuffer);
+                
+                buffer_point_set(newLineLoc);
+                return true;
+            }
         }
     }
     
@@ -480,53 +493,68 @@ buffer_search_forward(wchar_t *string)
 }
 
 function bool 
-buffer_search_backward(wchar_t *string)
+buffer_search_backward(wchar_t **stringArray, s32 arrayN)
 {
     Buffer *buffer = editor.world.currentBuffer;
     wchar_t *arr = buffer->gapBuffer.storage;
     
-    // If the gap is after the point (or at the point)
-    if (buffer->point <= buffer->gapBuffer.left)
+    for (s32 k = 0;
+         k < arrayN;
+         ++k)
     {
-        // Search from point-1 to start
-        s32 n = buffer->point-1, m = string_length(string);
+        bool found = false;
+        s32 foundCharLoc = -1;
         
-        s32 newLineLoc = string_search_naive_first_backward(arr, n, string, m,
-                                                            0, buffer->point-1);
-        if (newLineLoc > -1)
+        // If the gap is after the point (or at the point)
+        if (buffer->point <= buffer->gapBuffer.left)
         {
-            buffer_point_set(newLineLoc);
-            return true;
-        }
-    }
-    // If the gap is before the point
-    else if (buffer->point > buffer->gapBuffer.left)
-    {
-        // Since this is after the gap, must account for the gap size in the index
-        s32 gapI = gap_buffer_user_to_gap_coords(&buffer->gapBuffer, buffer->point);
-        
-        // First search from gapI-1 to gapRight
-        s32 n = gapI-1-buffer->gapBuffer.right, m = string_length(string);
-        
-        s32 newLineLoc = string_search_naive_first_backward(arr, n, string, m,
-                                                            buffer->gapBuffer.right, gapI-1);
-        if (newLineLoc > -1)
-        {
-            // Again, since it's after the gap, must convert back
-            newLineLoc -= gap_buffer_gap_length(&buffer->gapBuffer);
+            // Search from point-1 to start
+            s32 n = buffer->point-1, m = string_length(stringArray[k]);
             
-            buffer_point_set(newLineLoc);
-            return true;
+            s32 foundLoc = string_search_naive_first_backward(arr, n, stringArray[k], m,
+                                                              0, buffer->point-1);
+            if (foundLoc > -1)
+            {
+                foundCharLoc = foundLoc;
+                found = true;
+            }
+        }
+        // If the gap is before the point
+        else if (buffer->point > buffer->gapBuffer.left)
+        {
+            // Since this is after the gap, must account for the gap size in the index
+            s32 gapI = gap_buffer_user_to_gap_coords(&buffer->gapBuffer, buffer->point);
+            
+            // First search from gapI-1 to gapRight
+            s32 n = gapI-1-buffer->gapBuffer.right, m = string_length(stringArray[k]);
+            
+            s32 foundLoc = string_search_naive_first_backward(arr, n, stringArray[k], m,
+                                                              buffer->gapBuffer.right, gapI-1);
+            if (foundLoc > -1)
+            {
+                // Again, since it's after the gap, must convert back
+                foundLoc -= gap_buffer_gap_length(&buffer->gapBuffer);
+                
+                foundCharLoc = foundLoc;
+                found = true;
+            }
+            
+            // Then search from gapLeft-1 to start
+            n = buffer->gapBuffer.left-1, m = string_length(stringArray[k]);
+            
+            foundLoc = string_search_naive_first_backward(arr, n, stringArray[k], m,
+                                                          0, buffer->gapBuffer.left-1);
+            if (foundLoc > -1)
+            {
+                foundCharLoc = foundLoc;
+                found = true;
+            }
         }
         
-        // Then search from gapLeft-1 to start
-        n = buffer->gapBuffer.left-1, m = string_length(string);
-        
-        newLineLoc = string_search_naive_first_backward(arr, n, string, m,
-                                                        0, buffer->gapBuffer.left-1);
-        if (newLineLoc > -1)
+        //
+        if (found)
         {
-            buffer_point_set(newLineLoc);
+            buffer_point_set(foundCharLoc);
             return true;
         }
     }

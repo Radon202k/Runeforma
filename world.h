@@ -34,6 +34,14 @@ world_init(World *world)
     }
     
     editor.scrollBarPoint = 1;
+    
+    // Define a size to draw each bucket
+    world->bucketSize = v2(editor.font32.charWidth, editor.font32.lineAdvance);
+    
+    // Calculate origin (bottom left) based on buffer size
+    world->origin = v2(0, engine.backBufferSize.y-2.0f*world->bucketSize.y);
+    
+    world->origin.x += 2*world->bucketSize.x;
 }
 
 function void world_fini(World *world)

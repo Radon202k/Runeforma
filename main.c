@@ -12,12 +12,19 @@
 // Include Engine2D
 #include "engine2d.h"
 
+// This file defines all data structures
+#include "datastructures.h"
+
+global Editor editor;
+
 // Include the other files
+#include "render.h"
+#include "animator.h"
 #include "string.h"
 #include "subeditor.h"
 #include "display.h"
 #include "usercommands.h"
-#include "animator.h"
+#include "input.h"
 
 // Init is called once by Engine2D at startup
 function void init()
@@ -28,46 +35,34 @@ function void init()
     // Init the world
     world_init(&editor.world);
     
-    // Animation test stuff
-    animator_init_v2(&editor.test, 1, v2(1,-0.66f), v2(.3f,.99f),
-                     v2(.25f*engine.backBufferSize.x, .5f*engine.backBufferSize.y),
-                     v2(.75f*engine.backBufferSize.x, .5f*engine.backBufferSize.y));
+    animator_init_v2(&editor.pointPosAnimator, 5, v2(.02f,.96f), v2(.24f,.98f),
+                     v2(0,0), v2(100,0));
+    
+    animator_init_v2(&editor.originAnimator, 5, v2(.02f,.96f), v2(.24f,.98f),
+                     v2(0,0), v2(100,0));
+}
+
+// Resized is called once by Engine2D after the window has been resized
+function void resized()
+{
+    World *world = &editor.world;
+    world->origin = v2(0, engine.backBufferSize.y-2.0f*world->bucketSize.y);
+    world->origin.x += 2*world->bucketSize.x;
 }
 
 // Update is called once per frame by Engine2D
 function void update()
 {
-    SpriteGroup *layer1 = sprite_group_push_layer(1);
-    SpriteGroup *layer2 = sprite_group_push_layer(2);
+    SpriteGroup *layer1 = sprite_group_get_layer(1);
+    SpriteGroup *layer2 = sprite_group_get_layer(2);
     
     Buffer *buffer = editor.world.currentBuffer;
-    s32 bufferSize = gap_buffer_current_length(&buffer->gapBuffer);
+    s32 bufferSize = gap_buffer_length(&buffer->gapBuffer);
     
-    if (editor.dragging && !engine.mouse.left.down)
-    {
-        editor.dragging = false;
-    }
-    
-    handle_user_navigation();
+    input_update();
     
     // Render the current frame
     display_render_frame();
-    
-    // Anim test stuff
-    Vector2 rectPos = animator_update_v2(&editor.test);
-    
-    // Draw the rect at the lerped position
-    draw_rect(layer1, editor.white, rectPos, 
-              v2(10,10), rgba(1,0,0,1), 0);
-    
-    // draw anim t label 
-    draw_label_float(layer1, &editor.font32,
-                     editor.test.t, 
-                     v2(engine.backBufferSize.x-100,2*32), 
-                     1, rgba(1,1,0,1), 1, false);
-    
-    // Draw the animation curve
-    animator_draw_bezier_curve(&editor.test);
     
 #if 0
     // TODO: Update to handle variable char widths

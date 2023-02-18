@@ -1,21 +1,55 @@
 #pragma once
 
 function void
+animator_play(Animator *anim)
+{
+    anim->isPlaying = true;
+    anim->finished = false;
+    anim->t = 0;
+    assert(anim->tVel > 0);
+}
+
+function void
 animator_base_update(Animator *anim)
 {
-    // Advance the animation t 
-    anim->t += anim->tVel*engine.dt;
-    
-    // Clamp and reverse the velocity at boundaries [0,1]
-    if (anim->t > 1)
+    if (anim->isPlaying)
     {
-        anim->t = 1;
-        anim->tVel *= -1;
-    }
-    else if (anim->t < 0)
-    {
-        anim->t = 0;
-        anim->tVel *= -1;
+        // Advance the animation t 
+        anim->t += anim->tVel*engine.dt;
+        
+        // Clamp and reverse the velocity at boundaries [0,1]
+        if (anim->t > 1)
+        {
+            anim->t = 1;
+            
+            if (anim->loop)
+            {
+                anim->t = 0;
+            }
+            else if(anim->backAndForward)
+            {
+                anim->tVel *= -1;
+            }
+            else
+            {
+                anim->finished = true;
+            }
+        }
+        else if (anim->t < 0)
+        {
+            anim->t = 0;
+            if (anim->loop)
+            {
+            }
+            else if (anim->backAndForward)
+            {
+                anim->tVel *= -1;
+            }
+            else
+            {
+                anim->finished = true;
+            }
+        }
     }
 }
 
@@ -42,21 +76,47 @@ animator_evaluate_bezier_curve(Animator *anim, bool *inverted)
 }
 
 function void
-animator_init_v2(Animator *anim, float velocity,
-                 Vector2 c0, Vector2 c1,
-                 Vector2 a, Vector2 b)
+animator_base_init(Animator *anim, float velocity,
+                   Vector2 c0, Vector2 c1)
 {
     anim->tVel = velocity;
     
     // Control points positions
     anim->c0 = c0;
     anim->c1 = c1;
+}
+
+function void
+animator_set_v2(Animator *anim, Vector2 a, Vector2 b)
+{
+    *((Vector2 *)(anim->a)) = a;
+    *((Vector2 *)(anim->b)) = b;
+}
+
+function void
+animator_init_v2(Animator *anim, float velocity,
+                 Vector2 c0, Vector2 c1,
+                 Vector2 a, Vector2 b)
+{
+    animator_base_init(anim, velocity, c0, c1);
     
     anim->a = alloc_type(Vector2);
-    *((Vector2 *)(anim->a)) = a;
-    
     anim->b = alloc_type(Vector2);
-    *((Vector2 *)(anim->b)) = b;
+    animator_set_v2(anim, a, b);
+}
+
+function void
+animator_init_color(Animator *anim, float velocity,
+                    Vector2 c0, Vector2 c1,
+                    Color a, Color b)
+{
+    animator_base_init(anim, velocity, c0, c1);
+    
+    anim->a = alloc_type(Color);
+    *((Color *)(anim->a)) = a;
+    
+    anim->b = alloc_type(Color);
+    *((Color *)(anim->b)) = b;
 }
 
 function Vector2
@@ -81,35 +141,51 @@ animator_update_v2(Animator *anim)
     return lerpedPos;
 }
 
+function Color
+animator_update_color(Animator *anim)
+{
+    animator_base_update(anim);
+    
+    // Get the positions a,b
+    Color *a = (Color *)anim->a;
+    Color *b = (Color *)anim->b;
+    
+    bool inverted = false;
+    Vector2 bezier = animator_evaluate_bezier_curve(anim, &inverted);
+    if (inverted)
+    {
+        b = (Color *)anim->a;
+        a = (Color *)anim->b;
+    }
+    
+    // Lerp the position
+    Color lerpedPos = color_lerp(*a, bezier.y, *b);
+    return lerpedPos;
+}
+
+
 function void
 animator_update_and_render_cp(float px, float py, Vector2 *cp, Vector2 cpSize,
                               float windowX, float windowY,
                               float windowW, float windowH)
 {
-    SpriteGroup *layer1 = sprite_group_push_layer(1);
+    SpriteGroup *layer1 = sprite_group_get_layer(1);
     
     float cx = windowX+cp->x*windowW;
     float cy = windowY+cp->y*windowH;
     Vector2 controlSize = cpSize;
     
-    if (fabs(engine.mouse.pos.x-cx)<100.0f &&
-        fabs(engine.mouse.pos.y-cy)<100.0f)
+    bool hover = false;
+    Vector2 delta = {0};
+    if (mouse_dragged_handle(v2(cx,cy), 100, cp, 
+                             &hover, &delta))
     {
-        controlSize = v2_mul(1.5f,controlSize);
-        
-        if (engine.mouse.left.down && !editor.dragging)
-        {
-            editor.dragging = true;
-            editor.dragLastP = engine.mouse.pos;
-            editor.draggingAddress = cp;
-        }
+        *cp = v2_add(*cp,v2_mul(1.0f/windowW,delta));
     }
     
-    if (editor.dragging && editor.draggingAddress == cp)
+    if (hover)
     {
-        Vector2 deltaP = v2_sub(engine.mouse.pos,editor.dragLastP);
-        editor.dragLastP = engine.mouse.pos;
-        *cp = v2_add(*cp,v2_mul(1.0f/windowW,deltaP));
+        controlSize = v2_mul(2, controlSize);
     }
     
     // Draw the control point
@@ -123,15 +199,16 @@ animator_update_and_render_cp(float px, float py, Vector2 *cp, Vector2 cpSize,
 }
 
 function void
-animator_draw_bezier_curve(Animator *anim)
+animator_draw_bezier_curve(Animator *anim, Vector2 windowPos,
+                           Vector2 windowDim)
 {
-    SpriteGroup *layer1 = sprite_group_push_layer(1);
-    SpriteGroup *layer2 = sprite_group_push_layer(2);
+    SpriteGroup *layer1 = sprite_group_get_layer(1);
+    SpriteGroup *layer2 = sprite_group_get_layer(2);
     
-    float windowW = 200;
-    float windowH = 200;
-    float windowX = .5f*engine.backBufferSize.x-.5f*windowW;
-    float windowY = .5f*engine.backBufferSize.y-.5f*windowH;
+    float windowW = windowDim.x;
+    float windowH = windowDim.y;
+    float windowX = windowPos.x;
+    float windowY = windowPos.y;
     
     // Draw the window
     draw_rect(layer1, editor.white, 
@@ -248,4 +325,11 @@ animator_draw_bezier_curve(Animator *anim)
               v2(tx-.5f*pW,ty-.5f*pH),
               v2(pW,pH),
               pointCol, 1);
+    
+    // draw anim t label 
+    draw_label_float(layer1, &editor.font32,
+                     anim->t, 
+                     v2(windowX,windowY-1*32), 
+                     1, rgba(1,1,0,1), 1, false);
+    
 }

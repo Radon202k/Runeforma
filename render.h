@@ -91,6 +91,24 @@ draw_label_float(SpriteGroup *group, TruetypeFont *font,
                 v2(charPos.x, charPos.y - 16.0f), col, layer);
 }
 
+function void
+draw_label_v2(SpriteGroup *group, TruetypeFont *font,
+              Vector2 value, Vector2 pos, 
+              Color col, float layer)
+{
+    // Get a string for the number using _itoa_s
+    wchar_t x[32] = {0};
+    swprintf_s(x, 32, L"(%.6f,%.6f)", value.x, value.y);
+    
+    // Calculate the char size and position
+    Vector2 charPos = pos;
+    
+    draw_string(group, font, 
+                x, 
+                v2(charPos.x, charPos.y), col, layer);
+    
+}
+
 
 function void
 draw_label_v2i(SpriteGroup *group, TruetypeFont *font,

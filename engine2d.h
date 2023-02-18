@@ -202,6 +202,17 @@ rgba(float r, float g, float b, float a)
     return result;
 }
 
+inline Color
+color_lerp(Color a, float t, Color b)
+{
+    Color result = 
+        rgba(lerpf(a.r, t, b.r),
+             lerpf(a.g, t, b.g),
+             lerpf(a.b, t, b.b),
+             lerpf(a.a, t, b.a));
+    return result;
+}
+
 // Matrix 4x4 float type
 typedef struct
 {
@@ -562,6 +573,11 @@ typedef struct
     Key left;
     Key right;
     float wheel;
+    
+    bool dragging;
+    Vector2 dragLastP;
+    void *draggingAddress;
+    
 } Mouse;
 
 // Structure to hold all data the engine uses
@@ -621,6 +637,7 @@ global Engine engine;
 
 function void init();
 function void update();
+function void resized();
 
 /******************************************************************************
 *** [CONFIGURATION]
@@ -732,6 +749,94 @@ hash_table_set(HashTable *table, u32 hashIndex, void *data, float id)
     
     return false;
 }
+
+
+// Helper function to copy text to the clipboard
+function void 
+copy_text_to_clipboard(wchar_t *text)
+{
+    HGLOBAL globalMemory = GlobalAlloc(GMEM_MOVEABLE, (string_length(text)+1) * sizeof(wchar_t));
+    
+    wchar_t *data = (wchar_t *)GlobalLock(globalMemory);
+    
+    u32 copiedLength = string_length(text)+1;
+    
+    string_copy(data, copiedLength, text);
+    
+    assert(copiedLength < 1000);
+    
+    GlobalUnlock(globalMemory);
+    
+    if (OpenClipboard(NULL))
+    {
+        EmptyClipboard();
+        SetClipboardData(CF_UNICODETEXT, globalMemory);
+        CloseClipboard();
+    }
+    
+    GlobalFree(globalMemory);
+}
+
+// Helper function to paste text from the clipboard
+function s32 
+paste_text_from_clipboard(wchar_t *text, int maxLength)
+{
+    s32 pastedLength = 0;
+    
+    if (OpenClipboard(NULL))
+    {
+        HGLOBAL globalMemory = GetClipboardData(CF_UNICODETEXT);
+        if (globalMemory != NULL)
+        {
+            wchar_t *data = (wchar_t *)GlobalLock(globalMemory);
+            pastedLength = string_length(data);
+            
+            assert(pastedLength < 1000);
+            
+            string_copy_size(text, maxLength*sizeof(wchar_t), data, pastedLength);
+            GlobalUnlock(globalMemory);
+        }
+        
+        CloseClipboard();
+    }
+    
+    return pastedLength;
+}
+
+
+function bool
+mouse_dragged_handle(Vector2 p, float maxDist, void *address,
+                     bool *hover, Vector2 *delta)
+{
+    bool dragged = false;
+    
+    if (v2_length2(v2_sub(p,engine.mouse.pos)) < maxDist*maxDist)
+    {
+        *hover = true;
+        
+        if (engine.mouse.left.down && !engine.mouse.dragging)
+        {
+            engine.mouse.dragging = true;
+            engine.mouse.dragLastP = engine.mouse.pos;
+            engine.mouse.draggingAddress = address;
+        }
+    }
+    else
+    {
+        *hover = false;
+    }
+    
+    if (engine.mouse.dragging && engine.mouse.draggingAddress == address)
+    {
+        Vector2 deltaP = v2_sub(engine.mouse.pos,engine.mouse.dragLastP);
+        engine.mouse.dragLastP = engine.mouse.pos;
+        *delta = deltaP;
+        dragged = true;
+    }
+    
+    return dragged;
+}
+
 
 function void
 get_exe_path(wchar_t *path, DWORD size)
@@ -948,7 +1053,7 @@ sprite_create(u32 spriteWidth, u32 spriteHeight, u8 *bytes)
 {
     Sprite result = {0};
     
-    s32 margin = 10;
+    s32 margin = 1;
     
     SpriteAtlas *atlas = &engine.spriteAtlas;
     
@@ -1375,7 +1480,7 @@ font_create_from_file(wchar_t *fileName, wchar_t *fontName,
 
 // Get a new sprite layer to use
 function SpriteGroup *
-sprite_group_push_layer(u32 layer)
+sprite_group_get_layer(u32 layer)
 {
     assert(layer < array_count(engine.spriteGroups));
     return engine.spriteGroups + layer;
@@ -1540,6 +1645,11 @@ LRESULT window_proc(HWND window, UINT message, WPARAM wParam, LPARAM lParam)
         case WM_CLOSE:
         {
             engine.running = false;
+        } break;
+        
+        case WM_SIZE:
+        {
+            // TODO: Paint the window black or something
         } break;
         
         case WM_CHAR:
@@ -2329,6 +2439,8 @@ swap_chain_resize()
             exit(1);
         }
     }
+    
+    resized();
 }
 
 typedef struct
@@ -2939,6 +3051,12 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev,
             }
         }
         
+        // Mouse dragging
+        if (engine.mouse.dragging && !engine.mouse.left.down)
+        {
+            engine.mouse.dragging = false;
+        }
+        
         // Measure fps
         LARGE_INTEGER counter;
         QueryPerformanceCounter(&counter);
@@ -2949,6 +3067,7 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev,
         
         // Save counter
         lastCounter = counter;
+        
         
         // Call update for the app
         update();

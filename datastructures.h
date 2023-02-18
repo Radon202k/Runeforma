@@ -14,7 +14,9 @@ typedef struct Buffer
     struct Buffer *nextChainEntry;
     wchar_t bufferName[512];
     
-    s32 firstLine;
+    s32 firstLineCharP;
+    s32 lastLineCharP;
+    
     s32 point;
     s32 currentLine;
     s32 numChars;
@@ -37,6 +39,9 @@ typedef struct
     Buffer *bufferChain;
     Buffer *currentBuffer;
     
+    Vector2 bucketSize;
+    Vector2 origin;
+    
 } World;
 
 typedef struct
@@ -49,6 +54,11 @@ typedef struct
     
     Vector2 c0;
     Vector2 c1;
+    
+    bool loop;
+    bool backAndForward;
+    bool finished;
+    bool isPlaying;
 } Animator;
 
 typedef struct
@@ -67,14 +77,8 @@ typedef struct
     float contentHCache;
     bool contentHCached;
     
-    Animator test;
-    
-    bool sasukeUploaded;
-    Sprite sasuke;
-    
-    bool dragging;
-    Vector2 dragLastP;
-    
-    void *draggingAddress;
+    Vector2 lastPointP;
+    Animator pointPosAnimator;
+    Animator originAnimator;
     
 } Editor;
