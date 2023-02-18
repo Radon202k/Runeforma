@@ -35,6 +35,25 @@ command_animate_point(s32 oldPoint)
 }
 
 function void
+command_go_to_previous_line(void)
+{
+    World *world = &editor.world;
+    Buffer *buffer = world->currentBuffer;
+    
+    s32 oldPoint = buffer->point;
+    
+    // Search the first line break from there
+    wchar_t *searchStrings[1] = {L"\n"};
+    if (!buffer_search_backward(searchStrings, array_count(searchStrings)))
+    {
+        // If couldn't find any, set to the start of the buffer
+        buffer_point_set(0);
+    }
+    
+    command_animate_point(oldPoint);
+}
+
+function void
 command_go_to_next_line(void)
 {
     World *world = &editor.world;
@@ -164,6 +183,8 @@ command_paste_range(void)
     World *world = &editor.world;
     Buffer *buffer = world->currentBuffer;
     
+    s32 oldPoint = buffer->point;
+    
     s32 maxLength = 1024*1024;
     wchar_t *pastedText = alloc_array(maxLength, wchar_t);
     s32 pastedLength = paste_text_from_clipboard(pastedText, maxLength);
@@ -172,10 +193,14 @@ command_paste_range(void)
                                        pastedText, 
                                        buffer->point);
     
+    buffer->lastLineCharP = gap_buffer_find_last_linebreak(&buffer->gapBuffer);
+    
     free(pastedText);
     
     // Advance the point len worth
     buffer->point += len;
+    
+    command_animate_point(oldPoint);
 }
 
 function void
@@ -183,6 +208,8 @@ command_delete_range(void)
 {
     World *world = &editor.world;
     Buffer *buffer = world->currentBuffer;
+    
+    s32 oldPoint = buffer->point;
     
     if (buffer->point != buffer->mark)
     {
@@ -201,6 +228,10 @@ command_delete_range(void)
         // Move the mark to the point
         buffer->mark = buffer->point;
     }
+    
+    buffer->lastLineCharP = gap_buffer_find_last_linebreak(&buffer->gapBuffer);
+    
+    command_animate_point(oldPoint);
 }
 
 function void
@@ -208,6 +239,8 @@ command_insert_char(void)
 {
     World *world = &editor.world;
     Buffer *buffer = world->currentBuffer;
+    
+    s32 oldPoint = buffer->point;
     
     wchar_t c = engine.inputChar;
     if (c != 8 &&  // backspace
@@ -218,6 +251,7 @@ command_insert_char(void)
         {
             c = 10;
             buffer->numLines++;
+            buffer->lastLineCharP = gap_buffer_find_last_linebreak(&buffer->gapBuffer);
         }
         else
         {
@@ -243,6 +277,23 @@ command_insert_char(void)
                                  buffer->point);
         buffer->point += 2;
     }
+    
+    command_animate_point(oldPoint);
+    
+    //
+    
+    
+    // Add animation for new char
+    Animator *anim = alloc_type(Animator);
+    animator_init_color(anim, 1,
+                        v2(.5f,.5f), v2(-.5f,.5f),
+                        rgba(1,1,0,.1f), rgba(.4f,.4f,.4f,1),
+                        false,
+                        false);
+    
+    u32 hashIndex = hash_function_char_col_animators(oldPoint);
+    hash_table_set(&editor.charColAnimators, hashIndex, anim, (float)oldPoint);
+    animator_play(anim);
 }
 
 function void
@@ -250,6 +301,8 @@ command_backspace(void)
 {
     World *world = &editor.world;
     Buffer *buffer = world->currentBuffer;
+    
+    s32 oldPoint = buffer->point;
     
     if (buffer->point > 0)
     {
@@ -265,6 +318,8 @@ command_backspace(void)
             buffer->mark--;
         }
     }
+    
+    command_animate_point(oldPoint);
 }
 
 function void

@@ -713,7 +713,7 @@ hash_table_get(HashTable *table, u32 hashIndex, float id)
     while (node)
     {
         // If the ids are the same
-        if (table->storage[hashIndex]->id == id)
+        if (node->id == id)
         {
             // Found the item
             return node;
@@ -750,6 +750,48 @@ hash_table_set(HashTable *table, u32 hashIndex, void *data, float id)
     return false;
 }
 
+function HashTableNode *
+hash_table_remove(HashTable *table, u32 hashIndex, float id)
+{
+    assert(hashIndex < table->storageLength);
+    
+    // Look at hash table position
+    HashTableNode *node = table->storage[hashIndex];
+    
+    // While there are nodes in the collision chain
+    HashTableNode *lastNode = 0;
+    while (node)
+    {
+        // If the ids are the same
+        if (node->id == id)
+        {
+            // If the node is not the head
+            if (node != table->storage[hashIndex])
+            {
+                // Remove from chain
+                lastNode->next = node->next;
+                
+                node->next = 0;
+            }
+            // If the node is the head
+            else
+            {
+                // Set the head of the chain as null
+                table->storage[hashIndex] = 0;
+            }
+            
+            // Found the item
+            return node;
+        }
+        
+        lastNode = node;
+        
+        // Advance in the collision chain
+        node = node->next;
+    }
+    
+    return 0;
+}
 
 // Helper function to copy text to the clipboard
 function void 

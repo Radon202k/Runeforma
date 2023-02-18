@@ -108,9 +108,20 @@ animator_init_v2(Animator *anim, float velocity,
 function void
 animator_init_color(Animator *anim, float velocity,
                     Vector2 c0, Vector2 c1,
-                    Color a, Color b)
+                    Color a, Color b,
+                    bool loop,
+                    bool backAndForward)
 {
     animator_base_init(anim, velocity, c0, c1);
+    
+    if (loop)
+    {
+        anim->loop = loop;
+    }
+    else if (backAndForward)
+    {
+        anim->backAndForward = backAndForward;
+    }
     
     anim->a = alloc_type(Color);
     *((Color *)(anim->a)) = a;
@@ -142,10 +153,8 @@ animator_update_v2(Animator *anim)
 }
 
 function Color
-animator_update_color(Animator *anim)
+animator_get_color(Animator *anim)
 {
-    animator_base_update(anim);
-    
     // Get the positions a,b
     Color *a = (Color *)anim->a;
     Color *b = (Color *)anim->b;
@@ -163,6 +172,12 @@ animator_update_color(Animator *anim)
     return lerpedPos;
 }
 
+function Color
+animator_update_color(Animator *anim)
+{
+    animator_base_update(anim);
+    return animator_get_color(anim);
+}
 
 function void
 animator_update_and_render_cp(float px, float py, Vector2 *cp, Vector2 cpSize,

@@ -16,6 +16,7 @@ typedef struct Buffer
     
     s32 firstLineCharP;
     s32 lastLineCharP;
+    s32 lastVisibleCharP;
     
     s32 point;
     s32 currentLine;
@@ -61,6 +62,30 @@ typedef struct
     bool isPlaying;
 } Animator;
 
+typedef enum CTokenType
+{
+    CTokenType_Null,
+    CTokenType_Keyword,
+    CTokenType_Identifier,
+    CTokenType_Literal,
+    CTokenType_Operator,
+    CTokenType_Punctuation,
+    CTokenType_Comment
+} CTokenType;
+
+typedef struct
+{
+    wchar_t *value;
+    CTokenType type;
+    int length;
+} Token;
+
+typedef struct TokenNode
+{
+    Token *token;
+    struct TokenNode *next;
+} TokenNode;
+
 typedef struct
 {
     Sprite white;
@@ -79,6 +104,9 @@ typedef struct
     
     Vector2 lastPointP;
     Animator pointPosAnimator;
+    Animator pointColAnimator;
     Animator originAnimator;
+    
+    HashTable charColAnimators;
     
 } Editor;

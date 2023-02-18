@@ -1,6 +1,13 @@
 #pragma once
 
 function s32
+hash_function_char_col_animators(int c)
+{
+    u32 hashIndex = c % editor.charColAnimators.storageLength;
+    return hashIndex;
+}
+
+function s32
 gap_buffer_gap_length(GapBuffer *buffer)
 {
     return buffer->right-buffer->left;
@@ -19,7 +26,7 @@ function s32
 gap_buffer_user_to_gap_coords(GapBuffer *buffer, s32 userPoint)
 {
     s32 bufferSize = gap_buffer_length(buffer);
-    assert(userPoint >= 0 && userPoint <= bufferSize);
+    //assert(userPoint >= 0 && userPoint <= bufferSize+1);
     
     // If the point is before the start of the gap, the user coords
     // are the same as the internal coords
@@ -79,6 +86,7 @@ gap_buffer_init(GapBuffer *buffer, s32 *point,
     *point = dataLength;
 }
 
+// Return the range count
 function s32
 gap_buffer_get_range(GapBuffer *buffer, 
                      wchar_t *dest, s32 maxLength,
@@ -89,11 +97,16 @@ gap_buffer_get_range(GapBuffer *buffer,
     
     assert(point < mark);
     
+    s32 result = 0;
+    
     // If the gap is inside the range
     if (point <= GS && GS <= mark)
     {
         // Copy the first range between the point and the gap start
         copy_array(dest, buffer->storage + point, min(maxLength, (GS-point)), wchar_t);
+        
+        // Set the first range to the total range
+        result = min(maxLength, (GS-point)) - point;
         
         // Account for the fact that the mark is after the gap
         mark = gap_buffer_user_to_gap_coords(buffer, mark);
@@ -101,7 +114,8 @@ gap_buffer_get_range(GapBuffer *buffer,
         // Copy the second range between the gap end and the mark
         copy_array(dest+GS-point, buffer->storage+GE, (mark-GE), wchar_t);
         
-        return mark-GE;
+        // Add the second range
+        result += mark-GE;
     }
     // Else if gap is after the range
     else if (mark < GS)
@@ -109,7 +123,8 @@ gap_buffer_get_range(GapBuffer *buffer,
         // Copy from point to mark (gap is after so it doesn't matter)
         copy_array(dest, buffer->storage+point, (mark-point), char);
         
-        return mark-point;
+        // Set the range
+        result = mark-point;
     }
     // Else if gap is before the range
     else if (GS < point)
@@ -121,11 +136,11 @@ gap_buffer_get_range(GapBuffer *buffer,
         // Copy from point to mark (gap is before so it doesn't matter)
         copy_array(dest, buffer->storage+point, (mark-point), char);
         
-        return mark-point;
+        // Set the range
+        result = mark-point;
     }
     
-    assert(!"not");
-    return 0;
+    return result;
 }
 
 function void
@@ -342,6 +357,26 @@ gap_buffer_point_to_screen_pos(GapBuffer *buffer, s32 firstLine, s32 point,
     return bucketPos;
 }
 
+function s32
+gap_buffer_find_last_linebreak(GapBuffer *buffer)
+{
+    s32 result = 0;
+    
+    // For every character in the buffer
+    for (s32 i = 0;
+         i < gap_buffer_length(buffer);
+         ++i)
+    {
+        wchar_t c = gap_buffer_get_char(buffer, i);
+        if (c == '\n')
+        {
+            // Register the linebreak
+            result = i;
+        }
+    }
+    
+    return result;
+}
 
 function float
 gap_buffer_content_height(GapBuffer *buffer, float bucketHeight)
@@ -382,7 +417,8 @@ gap_buffer_content_height(GapBuffer *buffer, float bucketHeight)
 }
 
 function void
-gap_buffer_draw(GapBuffer *buffer, s32 firstLine,
+gap_buffer_draw(GapBuffer *buffer, 
+                s32 firstLine, s32 *lastChar,
                 s32 point, s32 mark,
                 Vector2 origin, Vector2 bucketSize)
 {
@@ -390,25 +426,51 @@ gap_buffer_draw(GapBuffer *buffer, s32 firstLine,
     SpriteGroup *layer2 = sprite_group_get_layer(2);
     
     s32 bufferSize = gap_buffer_length(buffer);
+    Vector2 bucketPos = v2(origin.x, origin.y);
     
-    // Animate the origin
-    if (editor.originAnimator.isPlaying)
+    // Update all character color animators
+    for (u32 i = 0;
+         i < editor.charColAnimators.storageLength;
+         ++i)
     {
-        // Get the animated position
-        origin = animator_update_v2(&editor.originAnimator);
-        
-        if (editor.originAnimator.finished)
+        HashTableNode *node = editor.charColAnimators.storage[i];
+        if (node)
         {
-            editor.originAnimator.isPlaying = false;
+            Animator *glyphColAnim = (Animator *)node->data;
+            animator_update_color(glyphColAnim);
+            
+            if (glyphColAnim->finished)
+            {
+                HashTableNode *removed = hash_table_remove(&editor.charColAnimators, 
+                                                           i, (float)i);
+                
+                if (removed)
+                {
+                    free(removed->data);
+                    free(removed);
+                }
+            }
+            
+            node = node->next;
+            while (node)
+            {
+                glyphColAnim = (Animator *)node->data;
+                animator_update_color(glyphColAnim);
+                
+                if (glyphColAnim->finished)
+                {
+                    free(node->data);
+                }
+                
+                node = node->next;
+            }
         }
     }
     
-    //
-    Vector2 bucketPos = v2(origin.x, origin.y);
-    
+    // Draw all characters one by one
     s32 lineCount = 1;
-    
-    for (s32 i = firstLine; 
+    s32 i = firstLine;
+    for (; 
          i <= bufferSize; 
          ++i)
     {
@@ -424,17 +486,29 @@ gap_buffer_draw(GapBuffer *buffer, s32 firstLine,
             // bucketColor = rgba(.2f,.2f,.2f,1);
         }
         
+        Color glyphColor = rgba(.4f,.4f,.4f,1);
+        
+        u32 hashIndex = hash_function_char_col_animators(i);
+        HashTableNode *node = hash_table_get(&editor.charColAnimators, hashIndex, (float)i);
+        if (node)
+        {
+            Animator *glyphColAnim = (Animator *)node->data;
+            glyphColor = animator_get_color(glyphColAnim);
+        }
+        
         // Draw the actual glyph
         if (i < bufferSize)
         {
             if (c == 10)   // new line
             {
+#if 0 
                 draw_rect(layer1,
                           editor.white,
                           bucketPos,
                           v2(4,bucketSize.y),
                           rgba(1,1,0,.2f),
                           10);
+#endif
             }
             else
             {
@@ -442,7 +516,7 @@ gap_buffer_draw(GapBuffer *buffer, s32 firstLine,
                            &editor.font32, 
                            c, 
                            bucketPos, 
-                           rgba(.4f,.4f,.4f,1), 
+                           glyphColor, 
                            10);
             }
         }
@@ -464,11 +538,13 @@ gap_buffer_draw(GapBuffer *buffer, s32 firstLine,
                 }
             }
             
+            Color pointCol = animator_update_color(&editor.pointColAnimator);
+            
             draw_rect(layer2, 
                       editor.white, 
                       v2(pointPos.x, pointPos.y-editor.font32.maxDescent), 
                       v2(2, bucketSize.y+editor.font32.maxDescent), 
-                      rgba(1,0,0,.5f), 100);
+                      pointCol, 100);
             
         }
         
@@ -492,14 +568,18 @@ gap_buffer_draw(GapBuffer *buffer, s32 firstLine,
         {
             bucketPos.x = origin.x;
             bucketPos.y -= bucketSize.y;
+            lineCount++;
         }
         
         // If the line cound exceeds the window maximum
         if (bucketPos.y < 0)
         {
+            *lastChar = i;
             break;
         }
     }
+    
+    *lastChar = i;
 }
 
 function void

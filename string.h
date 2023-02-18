@@ -64,7 +64,7 @@ string_search_naive_first_backward(wchar_t *text, s32 n, wchar_t *pattern, s32 m
 
 // Naive algorithm to search for pattern in text
 function void 
-string_search_naive(char *text, s32 n, char *pattern, s32 m,
+string_search_naive(wchar_t *text, s32 n, wchar_t *pattern, s32 m,
                     s32 **foundPositions, s32 *foundCount)
 {
     (*foundPositions) = alloc_array(16, s32);

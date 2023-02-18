@@ -25,13 +25,7 @@ input_update(void)
         }
         else
         {
-            // Search the first line break from there
-            wchar_t *searchStrings[1] = {L"\n"};
-            if (!buffer_search_backward(searchStrings, array_count(searchStrings)))
-            {
-                // If couldn't find any, set to the start of the buffer
-                buffer_point_set(0);
-            }
+            command_go_to_previous_line();
         }
     }
     

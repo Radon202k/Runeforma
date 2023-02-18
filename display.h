@@ -34,7 +34,20 @@ display_render_frame(void)
     float winWidth = engine.backBufferSize.x;
     float winHeight = engine.backBufferSize.y;
     
+    // Animate the origin
     Vector2 origin = world->origin;
+    if (editor.originAnimator.isPlaying)
+    {
+        // Get the animated position
+        origin = animator_update_v2(&editor.originAnimator);
+        
+        if (editor.originAnimator.finished)
+        {
+            editor.originAnimator.isPlaying = false;
+        }
+    }
+    
+    
     Vector2 bucketSize = world->bucketSize;
     
     // Draw buffer name
@@ -56,6 +69,7 @@ display_render_frame(void)
         
         // Draw the text
         gap_buffer_draw(&buffer->gapBuffer, buffer->firstLineCharP, 
+                        &buffer->lastVisibleCharP,
                         buffer->point, buffer->mark,
                         origin, bucketSize);
     }
@@ -80,4 +94,33 @@ display_render_frame(void)
                    v2(engine.backBufferSize.x-100,3*32), 
                    1, rgba(1,1,0,1), 1, false);
     
+    // Search for occurences of the word "to"
+    s32 *foundPositions, foundCount;
+    
+    //buffer_search_entire_buffer(L"to", 2, &foundPositions, &foundCount);
+    
+    s32 bufferLength = buffer_length();
+    buffer_search_range(buffer->firstLineCharP, bufferLength,
+                        L"to", 2,
+                        &foundPositions, &foundCount);
+    
+    if (foundCount > 0)
+    {
+        for (s32 i = 0; i < foundCount; ++i)
+        {
+            s32 loc = foundPositions[i];
+            
+            Vector2 bucketPos = 
+                gap_buffer_point_to_screen_pos(&buffer->gapBuffer, 
+                                               buffer->firstLineCharP, loc, 
+                                               origin, 
+                                               bucketSize);
+            
+            draw_rect(layer2, editor.white, bucketPos, 
+                      v2(bucketSize.x*2, bucketSize.y), rgba(1,0,0,0.5f), 10);
+        }
+        
+        // Has to free the allocated array
+        free(foundPositions);
+    }
 }

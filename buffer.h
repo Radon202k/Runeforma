@@ -1,5 +1,13 @@
 #pragma once
 
+// Returns the length of the buffer
+function s32
+buffer_length()
+{
+    Buffer *result = editor.world.currentBuffer;
+    return gap_buffer_length(&result->gapBuffer);
+}
+
 // Get a buffer pointer from a buffer name
 function Buffer *
 buffer_get(wchar_t *bufferName)
@@ -560,4 +568,103 @@ buffer_search_backward(wchar_t **stringArray, s32 arrayN)
     }
     
     return false;
+}
+
+function void 
+buffer_search_entire_buffer(wchar_t *pattern, s32 m,
+                            s32 **foundPositions, s32 *foundCount)
+{
+    Buffer *buffer = editor.world.currentBuffer;
+    
+    s32 *beforeGapPos, beforeGapCount;
+    string_search_naive(buffer->gapBuffer.storage, 
+                        buffer->gapBuffer.left, 
+                        L"to", 2,
+                        &beforeGapPos, &beforeGapCount);
+    
+    s32 *afterGapPos, afterGapCount;
+    string_search_naive(buffer->gapBuffer.storage+buffer->gapBuffer.right,
+                        buffer->gapBuffer.storageLength-buffer->gapBuffer.right,
+                        L"to", 2,
+                        &afterGapPos, &afterGapCount);
+    
+    // Allocate actual result array
+    *foundCount = beforeGapCount+afterGapCount;
+    *foundPositions = alloc_array(*foundCount,s32);
+    
+    // Copy the first array
+    for (s32 i = 0;
+         i < beforeGapCount;
+         ++i)
+    {
+        (*foundPositions)[i] = beforeGapPos[i]+1;
+    }
+    
+    // Copy the second array
+    for (s32 i = 0;
+         i < afterGapCount;
+         ++i)
+    {
+        (*foundPositions)[i+beforeGapCount] = afterGapPos[i]+2;
+    }
+    
+    // Has to free the temp arrays
+    free(beforeGapPos);
+    free(afterGapPos);
+}
+
+function void 
+buffer_get_range(s32 point, s32 mark, 
+                 wchar_t **result)
+{
+    s32 maxLength = mark-point;
+    *result = alloc_array(maxLength, wchar_t);
+    Buffer *buffer = editor.world.currentBuffer;
+    // Grab the range string from the gap buffer
+    s32 returnedRangeCount = gap_buffer_get_range(&buffer->gapBuffer, 
+                                                  *result, maxLength,
+                                                  point, mark);
+}
+
+function void 
+buffer_search_range(s32 point, s32 mark,
+                    wchar_t *pattern, s32 m,
+                    s32 **foundPositions, s32 *foundCount)
+{
+    Buffer *buffer = editor.world.currentBuffer;
+    if(point < mark)
+    {
+        // Alloc temp space for the range string
+        s32 rangeCount = mark-point;
+        wchar_t *string = alloc_array(rangeCount, wchar_t);
+        
+        // Grab the range string from the gap buffer
+        s32 returnedRangeCount = gap_buffer_get_range(&buffer->gapBuffer, 
+                                                      string, rangeCount,
+                                                      point, mark);
+        
+        // Search in the range string
+        s32 *searchPos, searchCount;
+        string_search_naive(string, rangeCount,
+                            pattern, m,
+                            &searchPos, &searchCount);
+        
+        if (searchCount > 0)
+        {
+            *foundCount = searchCount;
+            // Allocate actual result array
+            *foundPositions = alloc_array(searchCount, s32);
+            
+            // Copy the first array
+            for (s32 i = 0;
+                 i < searchCount;
+                 ++i)
+            {
+                (*foundPositions)[i] = searchPos[i]+1;
+            }
+        }
+        
+        free(searchPos);
+        free(string);
+    }
 }

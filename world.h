@@ -33,6 +33,8 @@ world_init(World *world)
 #endif
     }
     
+    editor.charColAnimators = hash_table_create(256);
+    
     editor.scrollBarPoint = 1;
     
     // Define a size to draw each bucket
