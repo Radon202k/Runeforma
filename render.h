@@ -70,6 +70,29 @@ draw_label_int(SpriteGroup *group, TruetypeFont *font,
 }
 
 function void
+draw_label_float(SpriteGroup *group, TruetypeFont *font,
+                 float value, Vector2 pos, float size, Color col, float layer,
+                 bool centered)
+{
+    // Get a string for the number using _itoa_s
+    wchar_t number[32] = {0};
+    
+    swprintf_s(number, 32, L"%.6f", value);
+    
+    // Claculate the char size and position
+    Vector2 charPos = pos;
+    
+    if (centered)
+    {
+        charPos.x -= string_length(number) * 0.5f*size;
+    }
+    
+    draw_string(group, font, number, 
+                v2(charPos.x, charPos.y - 16.0f), col, layer);
+}
+
+
+function void
 draw_label_v2i(SpriteGroup *group, TruetypeFont *font,
                Vector2i value, Vector2 pos, float size, Color col, float layer,
                bool centered)

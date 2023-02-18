@@ -48,6 +48,14 @@ typedef uint32_t bool;
 // Array count
 #define array_count(a) (sizeof(a) / sizeof((a)[0]))
 
+// Math
+inline float
+lerpf(float a, float t, float b)
+{
+    float result = (1-t)*a+t*b;
+    return result;
+}
+
 // Vector2 float type
 typedef struct
 {
@@ -60,6 +68,35 @@ v2(float x, float y)
 {
     Vector2 result = { x, y };
     return result;
+}
+
+inline Vector2
+v2f(s32 x, s32 y)
+{
+    Vector2 result = { (float)x, (float)y };
+    return result;
+}
+
+
+inline Vector2 
+v2_bezier(float x1, float y1, float x2, float y2, float t)
+{
+    Vector2 p0 = v2(0,0);
+    Vector2 p1 = v2(x1,y1);
+    Vector2 p2 = v2(x2,y2);
+    Vector2 p3 = v2(1,1);
+    
+    float u = 1.0f - t;
+    float tt = t * t;
+    float uu = u * u;
+    float uuu = uu * u;
+    float ttt = tt * t;
+    Vector2 p =
+    {
+        uuu * p0.x + 3.0f * uu * t * p1.x + 3.0f * u * tt * p2.x + ttt * p3.x,
+        uuu * p0.y + 3.0f * uu * t * p1.y + 3.0f * u * tt * p2.y + ttt * p3.y
+    };
+    return p;
 }
 
 // Vector2 Addition
@@ -118,6 +155,15 @@ inline float
 v2_length(Vector2 a)
 {
     return sqrtf(v2_length2(a));
+}
+
+inline Vector2
+v2_lerp(Vector2 a, float t, Vector2 b)
+{
+    Vector2 result = 
+        v2(lerpf(a.x, t, b.x),
+           lerpf(a.y, t, b.y));
+    return result;
 }
 
 // Vector2 Integer type
@@ -566,6 +612,9 @@ typedef struct
     IDirectSound8 *dsound;
     IDirectSoundBuffer *audioBuffers[32];
     u32 audioBufferIndex;
+    
+    u64 perfFrequency;
+    float dt;
 } Engine;
 
 global Engine engine;
@@ -1550,12 +1599,14 @@ LRESULT window_proc(HWND window, UINT message, WPARAM wParam, LPARAM lParam)
         
         case WM_LBUTTONUP:
         {
+            engine.mouse.left.down = false;
             engine.mouse.left.released = true;
         } break;
         
         case WM_RBUTTONUP:
         {
-            engine.mouse.left.released = true;
+            engine.mouse.right.down = false;
+            engine.mouse.right.released = true;
         } break;
         
         // [W3] . Call DefWindowProcA for every message we don't handle
@@ -2640,6 +2691,11 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev,
         engine.spriteAtlas.size * 4;
     engine.spriteAtlas.bytes = (u8 *)malloc(atlasMemorySize);
     
+    // Get perf frequency to measure fps
+    LARGE_INTEGER perfFrequency;
+    QueryPerformanceFrequency(&perfFrequency);
+    engine.perfFrequency = perfFrequency.QuadPart;
+    
     // Init the audio engine
     dsound8_init();
     
@@ -2859,6 +2915,9 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev,
     group->lineCommands = (LineCommand *)
         malloc(MAX_ALLOWED_RENDERED_LINES * sizeof(LineCommand));
     
+    LARGE_INTEGER lastCounter;
+    QueryPerformanceCounter(&lastCounter);
+    
     engine.running = true;
     while (engine.running)
     {
@@ -2879,6 +2938,17 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev,
                 engine.mouse.pos.y = engine.backBufferSize.y - (float)mousePoint.y; 
             }
         }
+        
+        // Measure fps
+        LARGE_INTEGER counter;
+        QueryPerformanceCounter(&counter);
+        
+        // Calculater fps
+        engine.dt = ((float)(counter.QuadPart - lastCounter.QuadPart) / 
+                     (float)engine.perfFrequency);
+        
+        // Save counter
+        lastCounter = counter;
         
         // Call update for the app
         update();

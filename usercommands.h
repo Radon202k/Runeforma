@@ -278,13 +278,13 @@ handle_user_navigation()
             wchar_t sasukePath[260];
             build_absolute_path(sasukePath, 260, L"images/sasuke.png");
             
-            sasuke = sprite_create_from_file(sasukePath);
-            assert(sasuke.exists);
+            editor.sasuke = sprite_create_from_file(sasukePath);
+            assert(editor.sasuke.exists);
             
             u8 *bytes = atlas_get_bytes();
             atlas_update(bytes);
             
-            sasukeUploaded = true;
+            editor.sasukeUploaded = true;
         }
     }
     

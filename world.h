@@ -33,6 +33,7 @@ world_init(World *world)
 #endif
     }
     
+    editor.scrollBarPoint = 1;
 }
 
 function void world_fini(World *world)

@@ -41,6 +41,18 @@ typedef struct
 
 typedef struct
 {
+    void *a;
+    void *b;
+    
+    float t;
+    float tVel;
+    
+    Vector2 c0;
+    Vector2 c1;
+} Animator;
+
+typedef struct
+{
     Sprite white;
     Sprite debugFont;
     bool showGap;
@@ -54,5 +66,15 @@ typedef struct
     
     float contentHCache;
     bool contentHCached;
+    
+    Animator test;
+    
+    bool sasukeUploaded;
+    Sprite sasuke;
+    
+    bool dragging;
+    Vector2 dragLastP;
+    
+    void *draggingAddress;
     
 } Editor;
